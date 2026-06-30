@@ -10,6 +10,7 @@ from yunet_train.tasks.face import (
     FaceSample,
     FilterSmallBoxes,
     Pad,
+    RandomGrayscale,
     RandomHorizontalFlip,
     RandomSquareCrop,
     Resize,
@@ -62,6 +63,41 @@ def test_horizontal_flip_keeps_legacy_keypoint_order() -> None:
     np.testing.assert_allclose(sample.keypoints[0, :, :2], [[2, 1], [5, 1], [4, 2], [2, 3], [5, 3]])
     assert sample.flip is True
     assert sample.flip_direction == "horizontal"
+
+
+def test_random_grayscale_disabled_by_default_is_noop() -> None:
+    sample = _sample()
+    original = sample.image.copy()
+
+    result = RandomGrayscale()(sample)
+
+    np.testing.assert_array_equal(result.image, original)
+
+
+def test_random_grayscale_keeps_three_channels_and_geometry() -> None:
+    np.random.seed(0)
+    image = np.zeros((4, 6, 3), dtype=np.uint8)
+    image[:, :, 0] = 30  # B
+    image[:, :, 1] = 60  # G
+    image[:, :, 2] = 90  # R
+    sample = _sample()
+    sample.image = image
+
+    result = RandomGrayscale(1.0)(sample)
+
+    assert result.image.shape == (4, 6, 3)
+    assert result.image.dtype == np.uint8
+    # all three channels equal after gray -> 3-channel replication
+    np.testing.assert_array_equal(result.image[:, :, 0], result.image[:, :, 1])
+    np.testing.assert_array_equal(result.image[:, :, 1], result.image[:, :, 2])
+    # boxes / keypoints are untouched by a color-only transform
+    np.testing.assert_allclose(result.boxes, [[1, 1, 4, 3]])
+    np.testing.assert_allclose(result.keypoints[0, :, :2], [[1, 1], [4, 1], [2, 2], [1, 3], [4, 3]])
+
+
+def test_random_grayscale_rejects_out_of_range_probability() -> None:
+    with pytest.raises(ValueError):
+        RandomGrayscale(1.5)
 
 
 def test_random_square_crop_can_pad_outside_image() -> None:

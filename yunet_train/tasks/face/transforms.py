@@ -92,6 +92,22 @@ class RandomHorizontalFlip:
         return sample
 
 
+class RandomGrayscale:
+    def __init__(self, probability: float = 0.0):
+        if not 0.0 <= probability <= 1.0:
+            raise ValueError("grayscale probability must be in [0, 1]")
+        self.probability = probability
+
+    def __call__(self, sample: FaceSample) -> FaceSample:
+        if self.probability <= 0.0 or np.random.random() >= self.probability:
+            return sample
+
+        image = _ensure_numpy_image(sample.image)
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        sample.image = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+        return sample
+
+
 class Normalize:
     def __init__(self, mean: Sequence[float], std: Sequence[float], *, to_rgb: bool = False):
         self.mean = np.array(mean, dtype=np.float32)
@@ -256,6 +272,7 @@ def build_train_transforms(
     image_size: int = 640,
     crop_choice: Sequence[float] = (0.5, 0.7, 0.9, 1.1, 1.3, 1.5),
     min_box_size: float = 10.0,
+    grayscale_prob: float = 0.0,
 ) -> Compose:
     return Compose(
         (
@@ -263,6 +280,7 @@ def build_train_transforms(
             Resize((image_size, image_size), keep_ratio=False),
             FilterSmallBoxes(min_size=min_box_size),
             RandomHorizontalFlip(0.5),
+            RandomGrayscale(grayscale_prob),
             Normalize(mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0), to_rgb=False),
             ToTensor(),
         )

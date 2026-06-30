@@ -17,11 +17,11 @@ from torch.utils.data import DataLoader
 
 from yunet_train.engine import LinearWarmupMultiStepLR, load_checkpoint, save_checkpoint
 from yunet_train.tasks.face import (
-    WIDERFaceDataset,
     WIDER_TRAIN_ANN_FILE,
     WIDER_TRAIN_IMAGE_DIR,
     WIDER_VAL_ANN_FILE,
     WIDER_VAL_IMAGE_DIR,
+    WIDERFaceDataset,
     YuNetCriterion,
     build_eval_transforms,
     build_train_transforms,
@@ -43,6 +43,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--work-dir", type=Path, default=Path("work_dirs/yunet"))
     parser.add_argument("--image-size", type=int, default=640)
     parser.add_argument("--min-face-size", type=float, default=10.0)
+    parser.add_argument("--grayscale-prob", type=float, default=0.5)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--prefetch-factor", type=int, default=1)
@@ -121,6 +122,7 @@ def run_training(args: argparse.Namespace) -> None:
             image_size=args.image_size,
             crop_choice=get_train_crop_choice(args.variant),
             min_box_size=args.min_face_size,
+            grayscale_prob=args.grayscale_prob,
         ),
     )
     if args.limit_samples is not None:
