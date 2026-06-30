@@ -16,32 +16,22 @@ keywords = ["face-detection", "pose-detection", "keypoints", "yunet", "widerface
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: BSD License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "numpy==2.4.4",
-    "opencv-python==4.13.0.92",
-    "tqdm==4.67.3",
-    "PyYAML==6.0.3",
-    "tensorboard==2.20.0",
-    "scipy==1.17.1",
-    "onnx==1.21.0",
-    "onnxruntime==1.25.1",
-]
-
-[project.optional-dependencies]
-dev = [
-    "pytest==9.0.3",
-    "ruff==0.15.12",
-]
-tflite = [
-    "onnx2tf==2.4.0",
-]
-pose = [
-    "pycocotools==2.0.11",
+    "numpy",
+    "opencv-python",
+    "tqdm",
+    "PyYAML",
+    "tensorboard",
+    "scipy",
+    "onnx",
+    "onnxruntime-gpu==1.26.0",
+    "pytest",
+    "pycocotools",
+    "onnx2tf",
 ]
 
 [project.urls]

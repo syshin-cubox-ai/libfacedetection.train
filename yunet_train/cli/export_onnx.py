@@ -15,7 +15,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--variant", choices=("yunet_n", "yunet_s"), default=None)
     parser.add_argument("--output-file", type=Path, default=None)
     parser.add_argument("--shape", type=int, nargs="+", default=[640, 640])
-    parser.add_argument("--opset-version", type=int, default=11)
+    parser.add_argument("--opset-version", type=int, default=18)
     parser.add_argument("--dynamic-export", action="store_true")
     parser.add_argument("--verify", action="store_true")
     parser.add_argument("--device", default="cpu")
