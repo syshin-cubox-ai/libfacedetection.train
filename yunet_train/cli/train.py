@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
 import platform
 import random
 import sys
 import time
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -13,7 +15,10 @@ from typing import Any
 import cv2
 import numpy as np
 import torch
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
 
 from yunet_train.engine import LinearWarmupMultiStepLR, load_checkpoint, save_checkpoint
 from yunet_train.tasks.face import (
@@ -21,6 +26,7 @@ from yunet_train.tasks.face import (
     WIDER_TRAIN_IMAGE_DIR,
     WIDER_VAL_ANN_FILE,
     WIDER_VAL_IMAGE_DIR,
+    TrainStats,
     WIDERFaceDataset,
     YuNetCriterion,
     build_eval_transforms,
@@ -31,6 +37,113 @@ from yunet_train.tasks.face import (
     get_train_crop_choice,
     train_one_epoch,
 )
+
+
+@dataclass(frozen=True)
+class DistContext:
+    """Holds the distributed rank layout for the current process."""
+
+    enabled: bool
+    rank: int
+    world_size: int
+    local_rank: int
+
+    @property
+    def is_main(self) -> bool:
+        return self.rank == 0
+
+
+def _init_distributed(device_type: str, backend: str | None) -> DistContext:
+    """Initialize the process group when launched under torchrun (WORLD_SIZE > 1).
+
+    Returns a disabled context for ordinary single-process runs so that direct
+    calls to ``run_training`` (e.g. from tests) behave exactly as before.
+    """
+    world_size = int(os.environ.get("WORLD_SIZE", "1"))
+    if world_size <= 1:
+        return DistContext(enabled=False, rank=0, world_size=1, local_rank=0)
+
+    rank = int(os.environ.get("RANK", "0"))
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    if backend is None:
+        backend = "nccl" if device_type == "cuda" else "gloo"
+    if device_type == "cuda":
+        torch.cuda.set_device(local_rank)
+    dist.init_process_group(
+        backend=backend, init_method="env://", world_size=world_size, rank=rank
+    )
+    return DistContext(
+        enabled=True, rank=rank, world_size=world_size, local_rank=local_rank
+    )
+
+
+def _resolve_device(args: argparse.Namespace, dist_ctx: DistContext) -> torch.device:
+    device = torch.device(args.device)
+    if dist_ctx.enabled and device.type == "cuda":
+        return torch.device(f"cuda:{dist_ctx.local_rank}")
+    return device
+
+
+def _set_deterministic(seed: int, logger: "RunLogger | NullLogger") -> None:
+    """Enable fully deterministic training for the given (per-process) seed.
+
+    ``CUBLAS_WORKSPACE_CONFIG`` must already be set in the environment (done in
+    ``run_training`` before the CUDA context is created) for deterministic cuBLAS
+    matmuls under ``use_deterministic_algorithms``.
+    """
+    random.seed(seed)
+    np.random.seed(seed % 2**32)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    torch.use_deterministic_algorithms(True)
+    logger(
+        f"deterministic_mode enabled seed={seed} "
+        f"cudnn_deterministic=True cudnn_benchmark=False use_deterministic_algorithms=True "
+        f"cublas_workspace_config={os.environ.get('CUBLAS_WORKSPACE_CONFIG')}"
+    )
+
+
+def _reduce_stats(
+    stats: TrainStats, device: torch.device, dist_ctx: DistContext
+) -> TrainStats:
+    """Average per-rank loss statistics into the global mean across all ranks.
+
+    Relies on ``DistributedSampler`` giving every rank an equal number of steps
+    (it pads the last batch), so the mean of per-rank means equals the global mean.
+    """
+    if not dist_ctx.enabled:
+        return stats
+    tensor = torch.tensor(
+        [stats.loss, stats.loss_cls, stats.loss_bbox, stats.loss_obj, stats.loss_kps],
+        dtype=torch.float64,
+        device=device,
+    )
+    dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
+    tensor /= dist_ctx.world_size
+    values = tensor.tolist()
+    return replace(
+        stats,
+        loss=values[0],
+        loss_cls=values[1],
+        loss_bbox=values[2],
+        loss_obj=values[3],
+        loss_kps=values[4],
+    )
+
+
+class NullLogger:
+    """Logger stand-in for non-main ranks; discards every message."""
+
+    path: Path | None = None
+
+    def __call__(self, message: str) -> None:  # noqa: D401 - matches RunLogger interface
+        del message
+
+    def close(self) -> None:
+        pass
 
 
 def parse_args() -> argparse.Namespace:
@@ -55,7 +168,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--warmup-ratio", type=float, default=0.001)
     parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--weight-decay", type=float, default=5e-4)
-    parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument(
+        "--device", default="cuda" if torch.cuda.is_available() else "cpu"
+    )
+    parser.add_argument(
+        "--dist-backend",
+        default=None,
+        choices=("nccl", "gloo"),
+        help="Distributed backend for multi-GPU training via torchrun (default: nccl on cuda, gloo on cpu).",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=0,
+        help="Enable fully deterministic training with this base seed "
+        "(cuDNN deterministic + torch.use_deterministic_algorithms). Omit for non-deterministic runs.",
+    )
     parser.add_argument("--checkpoint-interval", type=int, default=1)
     parser.add_argument("--eval-interval", type=int, default=100)
     parser.add_argument("--resume", type=Path, default=None)
@@ -75,11 +203,44 @@ def main() -> None:
 
 
 def run_training(args: argparse.Namespace) -> None:
-    args.work_dir.mkdir(parents=True, exist_ok=True)
-    logger = _build_run_logger(args)
+    if getattr(args, "seed", None) is not None:
+        # Required for deterministic cuBLAS; must be set before the CUDA context
+        # (created by torch.cuda.set_device during distributed init) is built.
+        os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+    device_type = torch.device(args.device).type
+    dist_ctx = _init_distributed(device_type, getattr(args, "dist_backend", None))
+    try:
+        _run_training(args, dist_ctx)
+    finally:
+        if dist_ctx.enabled:
+            dist.destroy_process_group()
+
+
+def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
+    if dist_ctx.is_main:
+        args.work_dir.mkdir(parents=True, exist_ok=True)
+    if dist_ctx.enabled:
+        dist.barrier()
+    logger = _build_run_logger(args) if dist_ctx.is_main else NullLogger()
     _log_run_header(logger, args)
-    device = torch.device(args.device)
+    if dist_ctx.enabled:
+        logger(
+            f"distributed backend={dist.get_backend()} "
+            f"world_size={dist_ctx.world_size} rank={dist_ctx.rank} local_rank={dist_ctx.local_rank} "
+            f"effective_batch_size={args.batch_size * dist_ctx.world_size}"
+        )
+    device = _resolve_device(args, dist_ctx)
+    seed = getattr(args, "seed", None)
+    if seed is not None:
+        # Offset by rank so stochastic ops differ across ranks; DDP still
+        # broadcasts rank-0 weights so model init stays consistent.
+        _set_deterministic(seed + dist_ctx.rank, logger)
+    loader_seed = None if seed is None else seed + dist_ctx.rank
     model = build_yunet(args.variant).to(device)
+    train_model: torch.nn.Module = model
+    if dist_ctx.enabled:
+        device_ids = [dist_ctx.local_rank] if device.type == "cuda" else None
+        train_model = DistributedDataParallel(model, device_ids=device_ids)
     criterion = YuNetCriterion(strides=(8, 16, 32))
     optimizer = torch.optim.SGD(
         model.parameters(),
@@ -127,18 +288,37 @@ def run_training(args: argparse.Namespace) -> None:
     )
     if args.limit_samples is not None:
         dataset.records = dataset.records[: args.limit_samples]
-    logger(f"train_dataset samples={len(dataset)} ann_file={args.ann_file} img_prefix={args.img_prefix}")
+    logger(
+        f"train_dataset samples={len(dataset)} ann_file={args.ann_file} img_prefix={args.img_prefix}"
+    )
 
+    train_sampler = (
+        DistributedSampler(
+            dataset,
+            num_replicas=dist_ctx.world_size,
+            rank=dist_ctx.rank,
+            shuffle=True,
+            seed=seed if seed is not None else 0,
+        )
+        if dist_ctx.enabled
+        else None
+    )
     data_loader = _build_data_loader(
         dataset,
         batch_size=args.batch_size,
-        shuffle=True,
+        shuffle=train_sampler is None,
+        sampler=train_sampler,
         workers=args.workers,
         prefetch_factor=args.prefetch_factor,
         persistent_workers=args.workers > 0 and not args.no_persistent_workers,
         pin_memory=device.type == "cuda" and not args.no_pin_memory,
+        loader_seed=loader_seed,
     )
-    val_loader = _build_val_loader(args, device) if args.eval_interval > 0 else None
+    val_loader = (
+        _build_val_loader(args, device, dist_ctx, loader_seed)
+        if args.eval_interval > 0
+        else None
+    )
     logger(
         f"train_loader steps={len(data_loader)} batch_size={args.batch_size} "
         f"workers={args.workers} prefetch_factor={args.prefetch_factor} "
@@ -148,7 +328,9 @@ def run_training(args: argparse.Namespace) -> None:
     if val_loader is not None:
         logger(f"val_loader steps={len(val_loader)} eval_interval={args.eval_interval}")
 
-    writer = _build_summary_writer(args.work_dir, disabled=args.no_tensorboard, logger=logger)
+    writer = _build_summary_writer(
+        args.work_dir, disabled=args.no_tensorboard, logger=logger
+    )
     train_started_at = time.perf_counter()
     remaining_epochs = max(args.epochs - start_epoch + 1, 0)
     total_train_steps = len(data_loader) * remaining_epochs
@@ -167,10 +349,12 @@ def run_training(args: argparse.Namespace) -> None:
                 f"pin_memory={device.type == 'cuda' and not args.no_pin_memory} "
                 f"{_format_progress_eta(train_started_at, total_train_steps, completed_steps_before_epoch)}"
             )
+            if train_sampler is not None:
+                train_sampler.set_epoch(epoch)
             epoch_started_at = time.perf_counter()
             try:
                 stats = train_one_epoch(
-                    model=model,
+                    model=train_model,
                     criterion=criterion,
                     data_loader=data_loader,
                     optimizer=optimizer,
@@ -189,14 +373,21 @@ def run_training(args: argparse.Namespace) -> None:
                 hinted_error = _with_dataloader_hint(exc, args)
                 logger(f"error={hinted_error}")
                 raise hinted_error from exc
+            stats = _reduce_stats(stats, device, dist_ctx)
             lr = optimizer.param_groups[0]["lr"]
             completed_train_steps = epoch * len(data_loader)
-            progress_eta = _format_progress_eta(train_started_at, total_train_steps, completed_train_steps)
-            eta_finish = _estimate_eta_finish(train_started_at, total_train_steps, completed_train_steps)
+            progress_eta = _format_progress_eta(
+                train_started_at, total_train_steps, completed_train_steps
+            )
+            eta_finish = _estimate_eta_finish(
+                train_started_at, total_train_steps, completed_train_steps
+            )
             elapsed_seconds = time.perf_counter() - train_started_at
             epoch_seconds = time.perf_counter() - epoch_started_at
             sec_per_step = epoch_seconds / max(stats.steps, 1)
-            samples_per_second = stats.steps * args.batch_size / max(epoch_seconds, 1e-12)
+            samples_per_second = (
+                stats.steps * args.batch_size / max(epoch_seconds, 1e-12)
+            )
             logger(
                 f"epoch={epoch} "
                 f"lr={lr:.8f} "
@@ -210,16 +401,6 @@ def run_training(args: argparse.Namespace) -> None:
                 f"samples_per_second={samples_per_second:.2f} "
                 f"{progress_eta}"
             )
-            _append_metrics_csv(
-                args.work_dir / "metrics.csv",
-                epoch,
-                stats,
-                lr=lr,
-                elapsed_seconds=elapsed_seconds,
-                eta_finish=eta_finish,
-            )
-            if writer is not None:
-                _write_tensorboard(writer, epoch, stats, optimizer, prefix="train")
             latest_metrics = {
                 "loss": stats.loss,
                 "loss_cls": stats.loss_cls,
@@ -229,21 +410,20 @@ def run_training(args: argparse.Namespace) -> None:
                 "lr": lr,
                 "best_loss": best_loss,
             }
-            latest_path = args.work_dir / "latest.pth"
-            _save_training_checkpoint(
-                path=latest_path,
-                model=model,
-                optimizer=optimizer,
-                epoch=epoch,
-                args=args,
-                metrics=latest_metrics,
-                lr_scheduler=lr_scheduler,
-            )
-            logger(f"saved_latest_checkpoint path={latest_path}")
-            if epoch % args.checkpoint_interval == 0:
-                checkpoint_path = args.work_dir / f"epoch_{epoch}.pth"
+            if dist_ctx.is_main:
+                _append_metrics_csv(
+                    args.work_dir / "metrics.csv",
+                    epoch,
+                    stats,
+                    lr=lr,
+                    elapsed_seconds=elapsed_seconds,
+                    eta_finish=eta_finish,
+                )
+                if writer is not None:
+                    _write_tensorboard(writer, epoch, stats, optimizer, prefix="train")
+                latest_path = args.work_dir / "latest.pth"
                 _save_training_checkpoint(
-                    path=checkpoint_path,
+                    path=latest_path,
                     model=model,
                     optimizer=optimizer,
                     epoch=epoch,
@@ -251,15 +431,28 @@ def run_training(args: argparse.Namespace) -> None:
                     metrics=latest_metrics,
                     lr_scheduler=lr_scheduler,
                 )
-                logger(f"saved_checkpoint path={checkpoint_path}")
+                logger(f"saved_latest_checkpoint path={latest_path}")
+                if epoch % args.checkpoint_interval == 0:
+                    checkpoint_path = args.work_dir / f"epoch_{epoch}.pth"
+                    _save_training_checkpoint(
+                        path=checkpoint_path,
+                        model=model,
+                        optimizer=optimizer,
+                        epoch=epoch,
+                        args=args,
+                        metrics=latest_metrics,
+                        lr_scheduler=lr_scheduler,
+                    )
+                    logger(f"saved_checkpoint path={checkpoint_path}")
             if val_loader is not None and epoch % args.eval_interval == 0:
                 logger(f"start_eval epoch={epoch} steps={len(val_loader)}")
                 val_stats = evaluate_loss(
-                    model=model,
+                    model=train_model,
                     criterion=criterion,
                     data_loader=val_loader,
                     device=device,
                 )
+                val_stats = _reduce_stats(val_stats, device, dist_ctx)
                 logger(
                     f"eval epoch={epoch} "
                     f"loss={val_stats.loss:.6f} "
@@ -268,16 +461,6 @@ def run_training(args: argparse.Namespace) -> None:
                     f"obj={val_stats.loss_obj:.6f} "
                     f"kps={val_stats.loss_kps:.6f}"
                 )
-                _append_metrics_csv(
-                    args.work_dir / "val_metrics.csv",
-                    epoch,
-                    val_stats,
-                    lr=lr,
-                    elapsed_seconds=time.perf_counter() - train_started_at,
-                    eta_finish=_estimate_eta_finish(train_started_at, total_train_steps, completed_train_steps),
-                )
-                if writer is not None:
-                    _write_tensorboard(writer, epoch, val_stats, optimizer, prefix="val")
                 val_metrics = {
                     "val_loss": val_stats.loss,
                     "val_loss_cls": val_stats.loss_cls,
@@ -287,43 +470,73 @@ def run_training(args: argparse.Namespace) -> None:
                     "lr": lr,
                     "best_loss": best_loss,
                 }
-                eval_checkpoint_path = args.work_dir / f"eval_epoch_{epoch}.pth"
-                _save_training_checkpoint(
-                    path=eval_checkpoint_path,
-                    model=model,
-                    optimizer=optimizer,
-                    epoch=epoch,
-                    args=args,
-                    metrics=val_metrics,
-                    lr_scheduler=lr_scheduler,
-                )
-                logger(f"saved_eval_checkpoint path={eval_checkpoint_path}")
-                if best_loss is None or val_stats.loss < best_loss:
+                is_best = best_loss is None or val_stats.loss < best_loss
+                if is_best:
                     best_loss = val_stats.loss
-                    best_metrics = {
-                        **val_metrics,
-                        "best_loss": best_loss,
-                    }
-                    best_path = args.work_dir / "best_loss.pth"
+                if dist_ctx.is_main:
+                    _append_metrics_csv(
+                        args.work_dir / "val_metrics.csv",
+                        epoch,
+                        val_stats,
+                        lr=lr,
+                        elapsed_seconds=time.perf_counter() - train_started_at,
+                        eta_finish=_estimate_eta_finish(
+                            train_started_at, total_train_steps, completed_train_steps
+                        ),
+                    )
+                    if writer is not None:
+                        _write_tensorboard(
+                            writer, epoch, val_stats, optimizer, prefix="val"
+                        )
+                    eval_checkpoint_path = args.work_dir / f"eval_epoch_{epoch}.pth"
                     _save_training_checkpoint(
-                        path=best_path,
+                        path=eval_checkpoint_path,
                         model=model,
                         optimizer=optimizer,
                         epoch=epoch,
                         args=args,
-                        metrics=best_metrics,
+                        metrics=val_metrics,
                         lr_scheduler=lr_scheduler,
                     )
-                    _write_best_loss(args.work_dir, best_loss=best_loss, epoch=epoch)
-                    logger(f"saved_best_checkpoint path={best_path} best_loss={best_loss:.6f}")
-        logger(f"run_finished elapsed={_format_duration(time.perf_counter() - train_started_at)}")
+                    logger(f"saved_eval_checkpoint path={eval_checkpoint_path}")
+                    if is_best:
+                        best_metrics = {
+                            **val_metrics,
+                            "best_loss": best_loss,
+                        }
+                        best_path = args.work_dir / "best_loss.pth"
+                        _save_training_checkpoint(
+                            path=best_path,
+                            model=model,
+                            optimizer=optimizer,
+                            epoch=epoch,
+                            args=args,
+                            metrics=best_metrics,
+                            lr_scheduler=lr_scheduler,
+                        )
+                        _write_best_loss(
+                            args.work_dir, best_loss=val_stats.loss, epoch=epoch
+                        )
+                        logger(
+                            f"saved_best_checkpoint path={best_path} best_loss={val_stats.loss:.6f}"
+                        )
+            if dist_ctx.enabled:
+                dist.barrier()
+        logger(
+            f"run_finished elapsed={_format_duration(time.perf_counter() - train_started_at)}"
+        )
     finally:
         if writer is not None:
             writer.close()
         logger.close()
 
 
-def _build_val_loader(args: argparse.Namespace, device: torch.device) -> DataLoader:
+def _build_val_loader(
+    args: argparse.Namespace,
+    device: torch.device,
+    dist_ctx: DistContext,
+    loader_seed: int | None = None,
+) -> DataLoader:
     dataset = WIDERFaceDataset(
         ann_file=args.val_ann_file,
         img_prefix=args.val_img_prefix,
@@ -333,14 +546,23 @@ def _build_val_loader(args: argparse.Namespace, device: torch.device) -> DataLoa
     if args.eval_limit_samples is not None:
         dataset.records = dataset.records[: args.eval_limit_samples]
 
+    val_sampler = (
+        DistributedSampler(
+            dataset, num_replicas=dist_ctx.world_size, rank=dist_ctx.rank, shuffle=False
+        )
+        if dist_ctx.enabled
+        else None
+    )
     return _build_data_loader(
         dataset,
         batch_size=args.batch_size,
         shuffle=False,
+        sampler=val_sampler,
         workers=args.workers,
         prefetch_factor=args.prefetch_factor,
         persistent_workers=args.workers > 0 and not args.no_persistent_workers,
         pin_memory=device.type == "cuda" and not args.no_pin_memory,
+        loader_seed=loader_seed,
     )
 
 
@@ -353,14 +575,19 @@ def _build_data_loader(
     prefetch_factor: int,
     persistent_workers: bool,
     pin_memory: bool,
+    sampler: DistributedSampler | None = None,
+    loader_seed: int | None = None,
 ) -> DataLoader:
     kwargs: dict[str, Any] = {
         "batch_size": batch_size,
         "shuffle": shuffle,
+        "sampler": sampler,
         "num_workers": workers,
         "collate_fn": collate_face_samples,
         "pin_memory": pin_memory,
     }
+    if loader_seed is not None:
+        kwargs["generator"] = torch.Generator().manual_seed(loader_seed)
     if workers > 0:
         kwargs["prefetch_factor"] = prefetch_factor
         kwargs["persistent_workers"] = persistent_workers
@@ -397,7 +624,7 @@ def _build_run_logger(args: argparse.Namespace) -> RunLogger:
     return RunLogger(log_file)
 
 
-def _log_run_header(logger: RunLogger, args: argparse.Namespace) -> None:
+def _log_run_header(logger: RunLogger | NullLogger, args: argparse.Namespace) -> None:
     logger("=" * 80)
     logger(f"run_started_at={datetime.now():%Y-%m-%d %H:%M:%S}")
     logger(f"log_file={logger.path}")
@@ -411,7 +638,9 @@ def _log_run_header(logger: RunLogger, args: argparse.Namespace) -> None:
     if torch.cuda.is_available():
         logger(f"cuda_device_count={torch.cuda.device_count()}")
         for device_idx in range(torch.cuda.device_count()):
-            logger(f"cuda_device[{device_idx}]={torch.cuda.get_device_name(device_idx)}")
+            logger(
+                f"cuda_device[{device_idx}]={torch.cuda.get_device_name(device_idx)}"
+            )
     for key, value in sorted(vars(args).items()):
         logger(f"arg.{key}={value}")
 
@@ -421,7 +650,9 @@ def _with_dataloader_hint(exc: RuntimeError, args: argparse.Namespace) -> Runtim
     if "DataLoader worker" not in message and "multiprocessing" not in message:
         return exc
 
-    estimated_batch_mb = args.batch_size * 3 * args.image_size * args.image_size * 4 / 1024 / 1024
+    estimated_batch_mb = (
+        args.batch_size * 3 * args.image_size * args.image_size * 4 / 1024 / 1024
+    )
     queued_batches = args.workers * args.prefetch_factor if args.workers > 0 else 1
     hint = (
         f"{message}\n\n"
@@ -469,24 +700,32 @@ def _read_best_loss(work_dir: Path) -> float | None:
 
 
 def _write_best_loss(work_dir: Path, *, best_loss: float, epoch: int) -> None:
-    (work_dir / "best_loss.txt").write_text(f"{best_loss:.12g},{epoch}\n", encoding="utf-8")
+    (work_dir / "best_loss.txt").write_text(
+        f"{best_loss:.12g},{epoch}\n", encoding="utf-8"
+    )
 
 
-def _checkpoint_best_loss(checkpoint: dict[str, Any], *, fallback: float | None) -> float | None:
+def _checkpoint_best_loss(
+    checkpoint: dict[str, Any], *, fallback: float | None
+) -> float | None:
     metrics = checkpoint.get("metrics", {})
     if isinstance(metrics, dict) and "best_loss" in metrics:
         return float(metrics["best_loss"])
     return fallback
 
 
-def _move_optimizer_state_to_device(optimizer: torch.optim.Optimizer, device: torch.device) -> None:
+def _move_optimizer_state_to_device(
+    optimizer: torch.optim.Optimizer, device: torch.device
+) -> None:
     for state in optimizer.state.values():
         for key, value in state.items():
             if isinstance(value, torch.Tensor):
                 state[key] = value.to(device)
 
 
-def _format_progress_eta(started_at: float, total_steps: int, completed_steps: int) -> str:
+def _format_progress_eta(
+    started_at: float, total_steps: int, completed_steps: int
+) -> str:
     if completed_steps <= 0:
         return "elapsed=00:00:00 eta=estimating"
 
@@ -508,7 +747,9 @@ def _format_progress_eta(started_at: float, total_steps: int, completed_steps: i
     )
 
 
-def _estimate_eta_finish(started_at: float, total_steps: int, completed_steps: int) -> str:
+def _estimate_eta_finish(
+    started_at: float, total_steps: int, completed_steps: int
+) -> str:
     if completed_steps <= 0:
         return ""
     elapsed_seconds = time.perf_counter() - started_at
@@ -578,13 +819,17 @@ def _append_metrics_csv(
                 "loss_obj": stats.loss_obj,
                 "loss_kps": stats.loss_kps,
                 "steps": stats.steps,
-                "elapsed_seconds": "" if elapsed_seconds is None else f"{elapsed_seconds:.3f}",
+                "elapsed_seconds": ""
+                if elapsed_seconds is None
+                else f"{elapsed_seconds:.3f}",
                 "eta_finish": eta_finish,
             }
         )
 
 
-def _build_summary_writer(work_dir: Path, *, disabled: bool, logger: RunLogger) -> Any | None:
+def _build_summary_writer(
+    work_dir: Path, *, disabled: bool, logger: RunLogger | NullLogger
+) -> Any | None:
     if disabled:
         return None
     try:
@@ -595,7 +840,14 @@ def _build_summary_writer(work_dir: Path, *, disabled: bool, logger: RunLogger) 
     return SummaryWriter(log_dir=str(work_dir / "tensorboard"))
 
 
-def _write_tensorboard(writer: Any, epoch: int, stats: Any, optimizer: torch.optim.Optimizer, *, prefix: str) -> None:
+def _write_tensorboard(
+    writer: Any,
+    epoch: int,
+    stats: Any,
+    optimizer: torch.optim.Optimizer,
+    *,
+    prefix: str,
+) -> None:
     writer.add_scalar(f"{prefix}/loss_total", stats.loss, epoch)
     writer.add_scalar(f"{prefix}/loss_cls", stats.loss_cls, epoch)
     writer.add_scalar(f"{prefix}/loss_bbox", stats.loss_bbox, epoch)
