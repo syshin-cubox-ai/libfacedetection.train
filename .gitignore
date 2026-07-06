@@ -54,3 +54,4 @@ tests/output/
 
 /onnx
 !/onnx/yunet*
+*.sqsh
