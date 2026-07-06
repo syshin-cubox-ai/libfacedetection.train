@@ -41,7 +41,7 @@ doc/
 
 ## Installation
 
-Create a Python environment and install PyTorch first. Choose the PyTorch build that matches your CUDA version from the official instructions: https://pytorch.org/.
+Create a Python environment and install PyTorch first. Choose the PyTorch build that matches your CUDA version from the official instructions: <https://pytorch.org/>.
 
 ```shell
 conda create -n yunet python=3.11
