@@ -27,7 +27,7 @@ torchrun \
     --nproc_per_node "${NUM_GPUS}" \
     --rdzv-backend c10d \
     --rdzv-endpoint localhost:0 \
-    -m yunet_train.cli.train
+    -m yunet_train.cli.train \
     --variant yunet_n \
     --image-size 640 \
     --epochs 640 \
