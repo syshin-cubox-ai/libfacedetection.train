@@ -228,16 +228,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit-samples", type=int, default=None)
     parser.add_argument("--eval-limit-samples", type=int, default=None)
     parser.add_argument("--no-wandb", action="store_true")
-    parser.add_argument(
-        "--wandb-project",
-        default="yunet-train",
-        help="Weights & Biases project name.",
-    )
-    parser.add_argument(
-        "--wandb-run-name",
-        default=None,
-        help="Weights & Biases run name (default: auto-generated).",
-    )
+    parser.add_argument("--wandb-project", default="yunet-train")
+    parser.add_argument("--wandb-run-name", default=None)
     parser.add_argument("--no-pin-memory", action="store_true")
     parser.add_argument("--no-persistent-workers", action="store_true")
     parser.add_argument("--log-interval", type=int, default=20)
