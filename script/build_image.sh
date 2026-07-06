@@ -26,7 +26,7 @@ apt update &&
 apt install build-essential curl nano pkg-config wget -y &&
 apt install libgl1 libglib2.0-0t64 -y &&
 pip config set global.no-cache-dir false &&
-pip install -r requirements.txt --break-system-packages &&
+pip install -e . --break-system-packages &&
 wandb login ${wandb_host} ${wandb_key}
 "
 enroot export -f yunet
