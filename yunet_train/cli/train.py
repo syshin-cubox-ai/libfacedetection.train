@@ -170,7 +170,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--work-dir", type=Path, default=Path("work_dirs/yunet"))
     parser.add_argument("--image-size", type=int, default=640)
     parser.add_argument("--min-face-size", type=float, default=10.0)
-    parser.add_argument("--grayscale-prob", type=float, default=0.5)
+    parser.add_argument("--grayscale-prob", type=float, default=0.0)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--prefetch-factor", type=int, default=1)
