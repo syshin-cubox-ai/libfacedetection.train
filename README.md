@@ -102,7 +102,7 @@ python -m yunet_train.tools.check_widerface --split val --check-images 10
 CPU smoke test:
 
 ```shell
-python -m yunet_train.cli.train --variant yunet_s --epochs 1 --batch-size 1 --workers 0 --device cpu --image-size 64 --limit-samples 1 --no-tensorboard
+python -m yunet_train.cli.train --variant yunet_s --epochs 1 --batch-size 1 --workers 0 --device cpu --image-size 64 --limit-samples 1 --no-wandb
 ```
 
 Train YuNet_n:
@@ -124,8 +124,10 @@ work_dirs/yunet_n/latest.pth
 work_dirs/yunet_n/best_loss.pth
 work_dirs/yunet_n/metrics.csv
 work_dirs/yunet_n/train.log
-work_dirs/yunet_n/tensorboard
+work_dirs/yunet_n/wandb
 ```
+
+Training metrics are logged to [Weights & Biases](https://wandb.ai) (`wandb login` required; disable with `--no-wandb`, choose the project/run with `--wandb-project`/`--wandb-run-name`).
 
 ### Evaluate on WIDER Face
 

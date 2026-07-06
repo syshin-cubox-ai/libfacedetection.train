@@ -13,7 +13,7 @@ dependencies = [
     "opencv-python",
     "tqdm",
     "PyYAML",
-    "tensorboard",
+    "wandb",
     "scipy",
     "onnx",
     "onnxruntime-gpu==1.26.0",

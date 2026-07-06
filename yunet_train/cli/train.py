@@ -227,7 +227,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resume", type=Path, default=None)
     parser.add_argument("--limit-samples", type=int, default=None)
     parser.add_argument("--eval-limit-samples", type=int, default=None)
-    parser.add_argument("--no-tensorboard", action="store_true")
+    parser.add_argument("--no-wandb", action="store_true")
+    parser.add_argument(
+        "--wandb-project",
+        default="yunet-train",
+        help="Weights & Biases project name.",
+    )
+    parser.add_argument(
+        "--wandb-run-name",
+        default=None,
+        help="Weights & Biases run name (default: auto-generated).",
+    )
     parser.add_argument("--no-pin-memory", action="store_true")
     parser.add_argument("--no-persistent-workers", action="store_true")
     parser.add_argument("--log-interval", type=int, default=20)
@@ -383,9 +393,7 @@ def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
     if val_loader is not None:
         logger(f"val_loader steps={len(val_loader)} eval_interval={args.eval_interval}")
 
-    writer = _build_summary_writer(
-        args.work_dir, disabled=args.no_tensorboard, logger=logger
-    )
+    wandb_run = _init_wandb(args, logger=logger) if dist_ctx.is_main else None
     train_started_at = time.perf_counter()
     remaining_epochs = max(args.epochs - start_epoch + 1, 0)
     total_train_steps = len(data_loader) * remaining_epochs
@@ -476,8 +484,8 @@ def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
                     elapsed_seconds=elapsed_seconds,
                     eta_finish=eta_finish,
                 )
-                if writer is not None:
-                    _write_tensorboard(writer, epoch, stats, optimizer, prefix="train")
+                if wandb_run is not None:
+                    _log_wandb(wandb_run, epoch, stats, optimizer, prefix="train")
                 latest_path = args.work_dir / "latest.pth"
                 _save_training_checkpoint(
                     path=latest_path,
@@ -543,10 +551,8 @@ def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
                             train_started_at, total_train_steps, completed_train_steps
                         ),
                     )
-                    if writer is not None:
-                        _write_tensorboard(
-                            writer, epoch, val_stats, optimizer, prefix="val"
-                        )
+                    if wandb_run is not None:
+                        _log_wandb(wandb_run, epoch, val_stats, optimizer, prefix="val")
                     eval_checkpoint_path = args.work_dir / f"eval_epoch_{epoch}.pth"
                     _save_training_checkpoint(
                         path=eval_checkpoint_path,
@@ -585,8 +591,8 @@ def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
             f"run_finished elapsed={_format_duration(time.perf_counter() - train_started_at)}"
         )
     finally:
-        if writer is not None:
-            writer.close()
+        if wandb_run is not None:
+            wandb_run.finish()
         logger.close()
 
 
@@ -888,34 +894,47 @@ def _append_metrics_csv(
         )
 
 
-def _build_summary_writer(
-    work_dir: Path, *, disabled: bool, logger: RunLogger | NullLogger
+def _init_wandb(
+    args: argparse.Namespace, *, logger: RunLogger | NullLogger
 ) -> Any | None:
-    if disabled:
+    if getattr(args, "no_wandb", False):
         return None
     try:
-        from torch.utils.tensorboard import SummaryWriter
+        import wandb
     except ImportError:
-        logger("TensorBoard is not installed; skipping TensorBoard logs.")
+        logger("wandb is not installed; skipping Weights & Biases logs.")
         return None
-    return SummaryWriter(log_dir=str(work_dir / "tensorboard"))
+    run = wandb.init(
+        project=getattr(args, "wandb_project", None) or "yunet-train",
+        name=getattr(args, "wandb_run_name", None),
+        dir=str(args.work_dir),
+        config=_serializable_config(args),
+    )
+    logger(f"wandb_run project={run.project} name={run.name} id={run.id} url={run.url}")
+    return run
 
 
-def _write_tensorboard(
-    writer: Any,
+def _log_wandb(
+    run: Any,
     epoch: int,
     stats: Any,
     optimizer: torch.optim.Optimizer,
     *,
     prefix: str,
 ) -> None:
-    writer.add_scalar(f"{prefix}/loss_total", stats.loss, epoch)
-    writer.add_scalar(f"{prefix}/loss_cls", stats.loss_cls, epoch)
-    writer.add_scalar(f"{prefix}/loss_bbox", stats.loss_bbox, epoch)
-    writer.add_scalar(f"{prefix}/loss_obj", stats.loss_obj, epoch)
-    writer.add_scalar(f"{prefix}/loss_kps", stats.loss_kps, epoch)
-    writer.add_scalar(f"{prefix}/loss_kps_rle", stats.loss_kps_rle, epoch)
-    writer.add_scalar("train/lr", optimizer.param_groups[0]["lr"], epoch)
+    run.log(
+        {
+            f"{prefix}/loss_total": stats.loss,
+            f"{prefix}/loss_cls": stats.loss_cls,
+            f"{prefix}/loss_bbox": stats.loss_bbox,
+            f"{prefix}/loss_obj": stats.loss_obj,
+            f"{prefix}/loss_kps": stats.loss_kps,
+            f"{prefix}/loss_kps_rle": stats.loss_kps_rle,
+            "train/lr": optimizer.param_groups[0]["lr"],
+            "epoch": epoch,
+        },
+        step=epoch,
+    )
 
 
 if __name__ == "__main__":
