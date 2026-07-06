@@ -18,6 +18,7 @@ class YuNetLossWeights:
     bbox: float = 5.0
     obj: float = 1.0
     kps: float = 0.1
+    kps_rle: float = 0.1
 
 
 class YuNetCriterion:
@@ -30,6 +31,7 @@ class YuNetCriterion:
         assigner: SimOTAAssigner | None = None,
         loss_weights: YuNetLossWeights | None = None,
         smooth_l1_beta: float = 1.0 / 9.0,
+        flow_model: torch.nn.Module | None = None,
     ):
         self.num_classes = num_classes
         self.kps_num = kps_num
@@ -37,16 +39,20 @@ class YuNetCriterion:
         self.assigner = assigner or SimOTAAssigner(center_radius=2.5)
         self.loss_weights = loss_weights or YuNetLossWeights()
         self.smooth_l1_beta = smooth_l1_beta
+        # YOLO26 Pose26 RLE loss: scores keypoint errors by the log-likelihood
+        # of a learned flow model, using predicted per-keypoint sigmas.
+        self.flow_model = flow_model
 
     def __call__(
         self,
-        preds: tuple[list[torch.Tensor], list[torch.Tensor], list[torch.Tensor], list[torch.Tensor]],
+        preds: tuple[list[torch.Tensor], ...],
         *,
         boxes: list[torch.Tensor],
         labels: list[torch.Tensor],
         keypoints: list[torch.Tensor],
     ) -> dict[str, torch.Tensor]:
-        cls_scores, bbox_preds, objectnesses, kps_preds = preds
+        cls_scores, bbox_preds, objectnesses, kps_preds = preds[:4]
+        kps_sigma_preds = preds[4] if len(preds) > 4 else None
         num_imgs = cls_scores[0].shape[0]
         featmap_sizes = [tuple(cls_score.shape[2:]) for cls_score in cls_scores]
         priors = self.prior_generator.grid_priors(
@@ -61,6 +67,11 @@ class YuNetCriterion:
         flatten_bbox_preds = _flatten_preds(bbox_preds, num_imgs, 4)
         flatten_objectness = _flatten_preds(objectnesses, num_imgs, 1).squeeze(-1)
         flatten_kps_preds = _flatten_preds(kps_preds, num_imgs, self.kps_num * 2)
+        flatten_kps_sigma = (
+            _flatten_preds(kps_sigma_preds, num_imgs, self.kps_num * 2)
+            if kps_sigma_preds is not None
+            else None
+        )
 
         expanded_priors = flatten_priors.unsqueeze(0).repeat(num_imgs, 1, 1)
         flatten_bboxes = bbox_decode(expanded_priors, flatten_bbox_preds)
@@ -84,6 +95,7 @@ class YuNetCriterion:
         bbox_targets = torch.cat([target["bbox_target"] for target in targets], dim=0)
         kps_targets = torch.cat([target["kps_target"] for target in targets], dim=0)
         kps_weights = torch.cat([target["kps_weight"] for target in targets], dim=0)
+        kps_vis_targets = torch.cat([target["kps_vis"] for target in targets], dim=0)
         num_pos = sum(target["num_pos"] for target in targets)
         num_total_samples = max(float(num_pos), 1.0)
 
@@ -125,18 +137,57 @@ class YuNetCriterion:
                 weight=kps_weights,
                 beta=self.smooth_l1_beta,
             ) * self.loss_weights.kps
+            if self.flow_model is not None and flatten_kps_sigma is not None:
+                flatten_kps_sigma_all = flatten_kps_sigma.reshape(-1, self.kps_num * 2)
+                vis_mask = kps_vis_targets > 0
+                loss_kps_rle = self._rle_loss(
+                    flatten_kps_preds_all[pos_masks].reshape(-1, self.kps_num, 2)[vis_mask],
+                    flatten_kps_sigma_all[pos_masks].reshape(-1, self.kps_num, 2)[vis_mask],
+                    encoded_kps.reshape(-1, self.kps_num, 2)[vis_mask],
+                ).clamp(min=0) * self.loss_weights.kps_rle
+            else:
+                loss_kps_rle = flatten_kps_preds_all.sum() * 0
         else:
             zero = flatten_cls_preds_all.sum() * 0
             loss_cls = zero
             loss_bbox = zero
             loss_kps = zero
+            loss_kps_rle = zero
 
-        return {
+        losses = {
             "loss_cls": loss_cls,
             "loss_bbox": loss_bbox,
             "loss_obj": loss_obj,
             "loss_kps": loss_kps,
         }
+        if self.flow_model is not None:
+            losses["loss_kps_rle"] = loss_kps_rle
+        return losses
+
+    def _rle_loss(
+        self,
+        pred_kps: torch.Tensor,
+        sigma_logits: torch.Tensor,
+        target_kps: torch.Tensor,
+    ) -> torch.Tensor:
+        """Residual log-likelihood estimation loss over visible keypoints ([N, 2] inputs)."""
+        if pred_kps.numel() == 0:
+            return pred_kps.sum() * 0
+        sigma = sigma_logits.sigmoid()
+        error = (pred_kps - target_kps) / (sigma + 1e-9)
+        valid = ~(torch.isnan(error) | torch.isinf(error)).any(dim=-1)
+        if not valid.any():
+            return pred_kps.sum() * 0
+        error = error[valid].clamp(-100, 100)
+        sigma = sigma[valid]
+        log_phi = self.flow_model.log_prob(error.to(torch.float32))
+        loss = (
+            torch.log(sigma)
+            - log_phi.unsqueeze(1)
+            + torch.log(sigma * 2)
+            + torch.abs(error)
+        )
+        return loss.sum() / loss.shape[0]
 
     @torch.no_grad()
     def _get_target_single(
@@ -164,6 +215,7 @@ class YuNetCriterion:
                 "bbox_target": cls_preds.new_zeros((0, 4)),
                 "kps_target": cls_preds.new_zeros((0, self.kps_num * 2)),
                 "kps_weight": cls_preds.new_zeros((0, 1)),
+                "kps_vis": cls_preds.new_zeros((0, self.kps_num)),
                 "num_pos": 0,
             }
 
@@ -189,6 +241,7 @@ class YuNetCriterion:
                 "bbox_target": cls_preds.new_zeros((0, 4)),
                 "kps_target": cls_preds.new_zeros((0, self.kps_num * 2)),
                 "kps_weight": cls_preds.new_zeros((0, 1)),
+                "kps_vis": cls_preds.new_zeros((0, self.kps_num)),
                 "num_pos": 0,
             }
 
@@ -202,6 +255,7 @@ class YuNetCriterion:
         bbox_target = gt_bboxes[pos_assigned_gt_inds]
         kps_target = gt_keypoints[pos_assigned_gt_inds, :, :2].reshape(-1, self.kps_num * 2)
         kps_weight = torch.mean(gt_keypoints[pos_assigned_gt_inds, :, 2], dim=1, keepdim=True)
+        kps_vis = gt_keypoints[pos_assigned_gt_inds, :, 2]
 
         return {
             "pos_mask": pos_mask,
@@ -210,6 +264,7 @@ class YuNetCriterion:
             "bbox_target": bbox_target,
             "kps_target": kps_target,
             "kps_weight": kps_weight,
+            "kps_vis": kps_vis,
             "num_pos": num_pos,
         }
 

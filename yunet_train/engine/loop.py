@@ -93,4 +93,5 @@ def _accumulate(
 ) -> None:
     totals["loss"] += float(loss.detach().cpu())
     for name in loss_names:
-        totals[name] += float(losses[name].detach().cpu())
+        if name in losses:
+            totals[name] += float(losses[name].detach().cpu())

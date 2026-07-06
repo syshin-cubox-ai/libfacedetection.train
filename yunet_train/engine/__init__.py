@@ -5,6 +5,7 @@ from .losses import bbox_overlaps, eiou_loss
 from .loop import evaluate_loss_epoch, train_loss_epoch
 from .nms import batched_nms, nms
 from .onnx_export import check_onnx, export_model_to_onnx, parse_input_shape, verify_onnx
+from .optim import MuSGD, build_musgd_param_groups
 from .priors import MlvlPointGenerator
 from .scheduler import LinearWarmupMultiStepLR
 
@@ -21,6 +22,8 @@ __all__ = [
     "nms",
     "MlvlPointGenerator",
     "LinearWarmupMultiStepLR",
+    "MuSGD",
+    "build_musgd_param_groups",
     "load_checkpoint",
     "load_model_weights_only",
     "save_checkpoint",

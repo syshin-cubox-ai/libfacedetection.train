@@ -20,7 +20,13 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from yunet_train.engine import LinearWarmupMultiStepLR, load_checkpoint, save_checkpoint
+from yunet_train.engine import (
+    LinearWarmupMultiStepLR,
+    MuSGD,
+    build_musgd_param_groups,
+    load_checkpoint,
+    save_checkpoint,
+)
 from yunet_train.tasks.face import (
     WIDER_TRAIN_ANN_FILE,
     WIDER_TRAIN_IMAGE_DIR,
@@ -117,7 +123,14 @@ def _reduce_stats(
     if not dist_ctx.enabled:
         return stats
     tensor = torch.tensor(
-        [stats.loss, stats.loss_cls, stats.loss_bbox, stats.loss_obj, stats.loss_kps],
+        [
+            stats.loss,
+            stats.loss_cls,
+            stats.loss_bbox,
+            stats.loss_obj,
+            stats.loss_kps,
+            stats.loss_kps_rle,
+        ],
         dtype=torch.float64,
         device=device,
     )
@@ -131,6 +144,7 @@ def _reduce_stats(
         loss_bbox=values[2],
         loss_obj=values[3],
         loss_kps=values[4],
+        loss_kps_rle=values[5],
     )
 
 
@@ -168,6 +182,30 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--warmup-ratio", type=float, default=0.001)
     parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--weight-decay", type=float, default=5e-4)
+    parser.add_argument(
+        "--optimizer",
+        default="sgd",
+        choices=("sgd", "musgd"),
+        help="musgd is the YOLO26 hybrid Muon+SGD optimizer.",
+    )
+    parser.add_argument(
+        "--muon-scale",
+        type=float,
+        default=0.5,
+        help="Muon component scale for --optimizer musgd.",
+    )
+    parser.add_argument(
+        "--sgd-scale",
+        type=float,
+        default=0.5,
+        help="SGD component scale for --optimizer musgd.",
+    )
+    parser.add_argument(
+        "--use-rle",
+        action="store_true",
+        help="Add YOLO26 Pose26 keypoint uncertainty: per-keypoint sigma head trained with an "
+        "RLE loss on a RealNVP flow model.",
+    )
     parser.add_argument(
         "--device", default="cuda" if torch.cuda.is_available() else "cpu"
     )
@@ -236,18 +274,35 @@ def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
         # broadcasts rank-0 weights so model init stays consistent.
         _set_deterministic(seed + dist_ctx.rank, logger)
     loader_seed = None if seed is None else seed + dist_ctx.rank
-    model = build_yunet(args.variant).to(device)
+    use_rle = getattr(args, "use_rle", False)
+    model = build_yunet(args.variant, use_kps_sigma=use_rle).to(device)
     train_model: torch.nn.Module = model
     if dist_ctx.enabled:
         device_ids = [dist_ctx.local_rank] if device.type == "cuda" else None
         train_model = DistributedDataParallel(model, device_ids=device_ids)
-    criterion = YuNetCriterion(strides=(8, 16, 32))
-    optimizer = torch.optim.SGD(
-        model.parameters(),
-        lr=args.lr,
-        momentum=args.momentum,
-        weight_decay=args.weight_decay,
-    )
+    flow_model = model.bbox_head.flow_model if use_rle else None
+    criterion = YuNetCriterion(strides=(8, 16, 32), flow_model=flow_model)
+    if getattr(args, "optimizer", "sgd") == "musgd":
+        optimizer: torch.optim.Optimizer = MuSGD(
+            build_musgd_param_groups(
+                model,
+                lr=args.lr,
+                momentum=args.momentum,
+                weight_decay=args.weight_decay,
+            ),
+            lr=args.lr,
+            momentum=args.momentum,
+            weight_decay=args.weight_decay,
+            muon=getattr(args, "muon_scale", 0.5),
+            sgd=getattr(args, "sgd_scale", 0.5),
+        )
+    else:
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.lr,
+            momentum=args.momentum,
+            weight_decay=args.weight_decay,
+        )
     lr_scheduler = LinearWarmupMultiStepLR(
         optimizer,
         milestones=tuple(args.lr_steps),
@@ -396,6 +451,7 @@ def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
                 f"bbox={stats.loss_bbox:.6f} "
                 f"obj={stats.loss_obj:.6f} "
                 f"kps={stats.loss_kps:.6f} "
+                f"rle={stats.loss_kps_rle:.6f} "
                 f"epoch_seconds={epoch_seconds:.3f} "
                 f"sec_per_step={sec_per_step:.4f} "
                 f"samples_per_second={samples_per_second:.2f} "
@@ -407,6 +463,7 @@ def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
                 "loss_bbox": stats.loss_bbox,
                 "loss_obj": stats.loss_obj,
                 "loss_kps": stats.loss_kps,
+                "loss_kps_rle": stats.loss_kps_rle,
                 "lr": lr,
                 "best_loss": best_loss,
             }
@@ -459,7 +516,8 @@ def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
                     f"cls={val_stats.loss_cls:.6f} "
                     f"bbox={val_stats.loss_bbox:.6f} "
                     f"obj={val_stats.loss_obj:.6f} "
-                    f"kps={val_stats.loss_kps:.6f}"
+                    f"kps={val_stats.loss_kps:.6f} "
+                    f"rle={val_stats.loss_kps_rle:.6f}"
                 )
                 val_metrics = {
                     "val_loss": val_stats.loss,
@@ -467,6 +525,7 @@ def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
                     "val_loss_bbox": val_stats.loss_bbox,
                     "val_loss_obj": val_stats.loss_obj,
                     "val_loss_kps": val_stats.loss_kps,
+                    "val_loss_kps_rle": val_stats.loss_kps_rle,
                     "lr": lr,
                     "best_loss": best_loss,
                 }
@@ -802,6 +861,7 @@ def _append_metrics_csv(
                 "loss_bbox",
                 "loss_obj",
                 "loss_kps",
+                "loss_kps_rle",
                 "steps",
                 "elapsed_seconds",
                 "eta_finish",
@@ -818,6 +878,7 @@ def _append_metrics_csv(
                 "loss_bbox": stats.loss_bbox,
                 "loss_obj": stats.loss_obj,
                 "loss_kps": stats.loss_kps,
+                "loss_kps_rle": stats.loss_kps_rle,
                 "steps": stats.steps,
                 "elapsed_seconds": ""
                 if elapsed_seconds is None
@@ -853,6 +914,7 @@ def _write_tensorboard(
     writer.add_scalar(f"{prefix}/loss_bbox", stats.loss_bbox, epoch)
     writer.add_scalar(f"{prefix}/loss_obj", stats.loss_obj, epoch)
     writer.add_scalar(f"{prefix}/loss_kps", stats.loss_kps, epoch)
+    writer.add_scalar(f"{prefix}/loss_kps_rle", stats.loss_kps_rle, epoch)
     writer.add_scalar("train/lr", optimizer.param_groups[0]["lr"], epoch)
 
 

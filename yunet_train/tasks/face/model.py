@@ -12,7 +12,12 @@ from .head import YuNetHead
 
 
 class YuNet(nn.Module):
-    def __init__(self, config: YuNetModelConfig):
+    def __init__(
+        self,
+        config: YuNetModelConfig,
+        *,
+        use_kps_sigma: bool = False,
+    ):
         super().__init__()
         self.config = config
         self.backbone = YuNetBackbone(
@@ -33,20 +38,22 @@ class YuNet(nn.Module):
             strides=config.strides,
             use_kps=config.use_kps,
             kps_num=config.kps_num,
+            use_kps_sigma=use_kps_sigma,
         )
 
     def extract_feat(self, img: torch.Tensor) -> list[torch.Tensor]:
         feats = self.backbone(img)
         return self.neck(feats)
 
-    def forward(
-        self,
-        img: torch.Tensor,
-    ) -> tuple[list[torch.Tensor], list[torch.Tensor], list[torch.Tensor], list[torch.Tensor]]:
+    def forward(self, img: torch.Tensor):
         feats = self.extract_feat(img)
         return self.bbox_head(feats)
 
 
-def build_yunet(variant: str = "yunet_n") -> YuNet:
-    return YuNet(get_model_config(variant))
+def build_yunet(
+    variant: str = "yunet_n",
+    *,
+    use_kps_sigma: bool = False,
+) -> YuNet:
+    return YuNet(get_model_config(variant), use_kps_sigma=use_kps_sigma)
 

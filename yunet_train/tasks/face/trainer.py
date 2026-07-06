@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 import torch
 from torch.utils.data import DataLoader
@@ -15,7 +15,7 @@ from .types import FaceBatch
 class Criterion(Protocol):
     def __call__(
         self,
-        preds: tuple[list[torch.Tensor], list[torch.Tensor], list[torch.Tensor], list[torch.Tensor]],
+        preds: Any,
         *,
         boxes: list[torch.Tensor],
         labels: list[torch.Tensor],
@@ -24,7 +24,7 @@ class Criterion(Protocol):
         ...
 
 
-LOSS_NAMES = ("loss_cls", "loss_bbox", "loss_obj", "loss_kps")
+LOSS_NAMES = ("loss_cls", "loss_bbox", "loss_obj", "loss_kps", "loss_kps_rle")
 
 
 @dataclass(frozen=True)
@@ -35,6 +35,7 @@ class TrainStats:
     loss_obj: float
     loss_kps: float
     steps: int
+    loss_kps_rle: float = 0.0
 
 
 def move_batch_to_device(batch: FaceBatch, device: torch.device | str) -> FaceBatch:
@@ -119,6 +120,7 @@ def _stats_from_totals(totals: dict[str, float], steps: int) -> TrainStats:
         loss_bbox=totals["loss_bbox"] / steps,
         loss_obj=totals["loss_obj"] / steps,
         loss_kps=totals["loss_kps"] / steps,
+        loss_kps_rle=totals.get("loss_kps_rle", 0.0) / steps,
         steps=steps,
     )
 
@@ -131,5 +133,6 @@ def _format_step(epoch: int, steps: int, total_steps: int, totals: dict[str, flo
         f"cls={totals['loss_cls'] / steps:.6f} "
         f"bbox={totals['loss_bbox'] / steps:.6f} "
         f"obj={totals['loss_obj'] / steps:.6f} "
-        f"kps={totals['loss_kps'] / steps:.6f}"
+        f"kps={totals['loss_kps'] / steps:.6f} "
+        f"rle={totals.get('loss_kps_rle', 0.0) / steps:.6f}"
     )

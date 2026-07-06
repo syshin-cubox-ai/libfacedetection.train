@@ -35,9 +35,9 @@ class YuNetPostprocessor:
     @torch.no_grad()
     def __call__(
         self,
-        preds: tuple[list[torch.Tensor], list[torch.Tensor], list[torch.Tensor], list[torch.Tensor]],
+        preds: tuple[list[torch.Tensor], ...],
     ) -> list[DetectionResult]:
-        cls_scores, bbox_preds, objectnesses, kps_preds = preds
+        cls_scores, bbox_preds, objectnesses, kps_preds = preds[:4]
         num_imgs = cls_scores[0].shape[0]
         featmap_sizes = [tuple(cls_score.shape[2:]) for cls_score in cls_scores]
         priors = self.prior_generator.grid_priors(
