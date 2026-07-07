@@ -233,6 +233,15 @@ def run_training(args: argparse.Namespace) -> None:
     dist_ctx = _init_distributed(device_type, getattr(args, "dist_backend", None))
     try:
         _run_training(args, dist_ctx)
+    except KeyboardInterrupt:
+        if dist_ctx.enabled:
+            # wandb "stop run" (and Ctrl-C) only interrupts this rank; the other
+            # ranks are still blocked inside NCCL collectives, so a graceful
+            # destroy_process_group() here deadlocks and torchrun never exits.
+            # Hard-exit instead: the torchrun agent sees the dead worker and
+            # tears down the remaining ranks itself.
+            os._exit(130)
+        raise
     finally:
         if dist_ctx.enabled:
             dist.destroy_process_group()
@@ -387,6 +396,7 @@ def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
     train_started_at = time.perf_counter()
     remaining_epochs = max(args.epochs - start_epoch + 1, 0)
     total_train_steps = len(data_loader) * remaining_epochs
+    interrupted = False
     try:
         if start_epoch > args.epochs:
             logger(f"nothing_to_train start_epoch={start_epoch} epochs={args.epochs}")
@@ -558,8 +568,18 @@ def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
         logger(
             f"run_finished elapsed={_format_duration(time.perf_counter() - train_started_at)}"
         )
+    except KeyboardInterrupt:
+        interrupted = True
+        logger(
+            "run_interrupted reason=KeyboardInterrupt (wandb stop-run or Ctrl-C); "
+            "shutting down without distributed cleanup so torchrun can reap all ranks"
+        )
+        raise
     finally:
-        if wandb_run is not None:
+        if wandb_run is not None and not interrupted:
+            # Skipped on interrupt: after a wandb UI stop the run is already
+            # finalized server-side, and finish() can block on the shutting-down
+            # wandb service — the service exits on its own when this rank dies.
             wandb_run.finish()
         logger.close()
 
