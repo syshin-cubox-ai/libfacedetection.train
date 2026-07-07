@@ -176,5 +176,47 @@ def test_train_cli_resume_from_latest_checkpoint(monkeypatch: pytest.MonkeyPatch
     rmtree(work_dir)
 
 
+def test_train_cli_refuses_existing_work_dir_without_resume() -> None:
+    work_dir = Path(__file__).resolve().parent / "output" / "train_cli_existing"
+    work_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        args = argparse.Namespace(
+            variant="yunet_s",
+            ann_file=Path("unused.txt"),
+            img_prefix=Path("unused"),
+            val_ann_file=Path("unused_val.txt"),
+            val_img_prefix=Path("unused_val"),
+            work_dir=work_dir,
+            image_size=64,
+            min_face_size=0.0,
+            grayscale_prob=0.0,
+            batch_size=1,
+            workers=0,
+            prefetch_factor=1,
+            epochs=1,
+            lr=1e-4,
+            lr_steps=[400, 544],
+            lr_gamma=0.1,
+            warmup_iters=0,
+            warmup_ratio=0.001,
+            momentum=0.9,
+            weight_decay=0.0,
+            device="cpu",
+            eval_interval=0,
+            resume=None,
+            limit_samples=None,
+            eval_limit_samples=None,
+            no_wandb=True,
+            no_pin_memory=False,
+            no_persistent_workers=False,
+            log_interval=0,
+            log_file=None,
+        )
+        with pytest.raises(FileExistsError):
+            train_cli.run_training(args)
+    finally:
+        rmtree(work_dir)
+
+
 def test_train_cli_module_import_has_no_circular_import() -> None:
     assert train_cli.parse_args is not None

@@ -243,6 +243,15 @@ def run_training(args: argparse.Namespace) -> None:
 
 
 def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
+    # Refuse to reuse an existing work_dir so a stray re-launch can't overwrite
+    # checkpoints/logs. --resume legitimately continues an existing run, so it is
+    # exempt. Every rank shares the filesystem and args, so all raise together.
+    if args.resume is None and args.work_dir.exists():
+        raise FileExistsError(
+            f"work_dir already exists: {args.work_dir}. "
+            "Refusing to overwrite an existing run. Choose a new --work-dir, "
+            "delete the existing one, or pass --resume to continue it."
+        )
     if dist_ctx.is_main:
         args.work_dir.mkdir(parents=True, exist_ok=True)
     if dist_ctx.enabled:
