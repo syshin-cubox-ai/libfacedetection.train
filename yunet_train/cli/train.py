@@ -182,12 +182,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--warmup-ratio", type=float, default=0.001)
     parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--weight-decay", type=float, default=5e-4)
-    parser.add_argument(
-        "--optimizer",
-        default="sgd",
-        choices=("sgd", "musgd"),
-        help="musgd is the YOLO26 hybrid Muon+SGD optimizer.",
-    )
+    parser.add_argument("--optimizer", default="sgd", choices=("sgd", "musgd"))
     parser.add_argument(
         "--muon-scale",
         type=float,
@@ -206,22 +201,14 @@ def parse_args() -> argparse.Namespace:
         help="Add YOLO26 Pose26 keypoint uncertainty: per-keypoint sigma head trained with an "
         "RLE loss on a RealNVP flow model.",
     )
-    parser.add_argument(
-        "--device", default="cuda" if torch.cuda.is_available() else "cpu"
-    )
+    parser.add_argument("--device", default="cuda")
     parser.add_argument(
         "--dist-backend",
         default=None,
         choices=("nccl", "gloo"),
         help="Distributed backend for multi-GPU training via torchrun (default: nccl on cuda, gloo on cpu).",
     )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=0,
-        help="Enable fully deterministic training with this base seed "
-        "(cuDNN deterministic + torch.use_deterministic_algorithms). Omit for non-deterministic runs.",
-    )
+    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--eval-interval", type=int, default=100)
     parser.add_argument("--resume", type=Path, default=None)
     parser.add_argument("--limit-samples", type=int, default=None)
