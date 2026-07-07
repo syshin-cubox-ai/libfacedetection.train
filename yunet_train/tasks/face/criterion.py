@@ -146,13 +146,20 @@ class YuNetCriterion:
                     encoded_kps.reshape(-1, self.kps_num, 2)[vis_mask],
                 ).clamp(min=0) * self.loss_weights.kps_rle
             else:
-                loss_kps_rle = flatten_kps_preds_all.sum() * 0
+                loss_kps_rle = flatten_kps_preds_all.sum() * 0 + self._rle_zero(flatten_kps_sigma)
         else:
-            zero = flatten_cls_preds_all.sum() * 0
+            # Keep every head in the autograd graph even without positives:
+            # under DDP a rank whose parameters receive no gradients never
+            # joins the allreduce and deadlocks the other ranks.
+            zero = (
+                flatten_cls_preds_all.sum()
+                + flatten_bboxes_all.sum()
+                + flatten_kps_preds_all.sum()
+            ) * 0
             loss_cls = zero
             loss_bbox = zero
             loss_kps = zero
-            loss_kps_rle = zero
+            loss_kps_rle = zero + self._rle_zero(flatten_kps_sigma)
 
         losses = {
             "loss_cls": loss_cls,
@@ -171,13 +178,16 @@ class YuNetCriterion:
         target_kps: torch.Tensor,
     ) -> torch.Tensor:
         """Residual log-likelihood estimation loss over visible keypoints ([N, 2] inputs)."""
+        # Every early return must keep the kps/sigma preds and the flow model
+        # in the graph so DDP ranks stay in sync.
+        anchor = (pred_kps.sum() + sigma_logits.sum()) * 0
         if pred_kps.numel() == 0:
-            return pred_kps.sum() * 0
+            return anchor + self._flow_anchor()
         sigma = sigma_logits.sigmoid()
         error = (pred_kps - target_kps) / (sigma + 1e-9)
         valid = ~(torch.isnan(error) | torch.isinf(error)).any(dim=-1)
         if not valid.any():
-            return pred_kps.sum() * 0
+            return anchor + self._flow_anchor()
         error = error[valid].clamp(-100, 100)
         sigma = sigma[valid]
         log_phi = self.flow_model.log_prob(error.to(torch.float32))
@@ -187,7 +197,24 @@ class YuNetCriterion:
             + torch.log(sigma * 2)
             + torch.abs(error)
         )
-        return loss.sum() / loss.shape[0]
+        return anchor + loss.sum() / loss.shape[0]
+
+    def _flow_anchor(self) -> torch.Tensor:
+        """Zero-valued log_prob on a dummy input to keep the flow model parameters in the graph."""
+        device = next(self.flow_model.parameters()).device
+        dummy = torch.zeros((1, 2), dtype=torch.float32, device=device)
+        return self.flow_model.log_prob(dummy).sum() * 0
+
+    def _rle_zero(
+        self, kps_sigma: torch.Tensor | None
+    ) -> torch.Tensor | float:
+        """Zero RLE loss that still connects the sigma head and flow model to the graph."""
+        if self.flow_model is None:
+            return 0.0
+        zero = self._flow_anchor()
+        if kps_sigma is not None:
+            zero = zero + kps_sigma.sum() * 0
+        return zero
 
     @torch.no_grad()
     def _get_target_single(
