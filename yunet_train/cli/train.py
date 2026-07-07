@@ -182,14 +182,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--warmup-ratio", type=float, default=0.001)
     parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--weight-decay", type=float, default=5e-4)
-    parser.add_argument(
-        "--grad-clip-norm",
-        type=float,
-        default=None,
-        help="Clip the global gradient norm to this value each step "
-        "(default: no clipping). Guards against divergence with large "
-        "effective batches or high learning rates.",
-    )
+    parser.add_argument("--grad-clip-norm", type=float, default=10)
     parser.add_argument("--optimizer", default="sgd", choices=("sgd", "musgd"))
     parser.add_argument(
         "--muon-scale",
@@ -210,12 +203,7 @@ def parse_args() -> argparse.Namespace:
         "RLE loss on a RealNVP flow model.",
     )
     parser.add_argument("--device", default="cuda")
-    parser.add_argument(
-        "--dist-backend",
-        default=None,
-        choices=("nccl", "gloo"),
-        help="Distributed backend for multi-GPU training via torchrun (default: nccl on cuda, gloo on cpu).",
-    )
+    parser.add_argument("--dist-backend", default=None, choices=("nccl", "gloo"))
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--eval-interval", type=int, default=100)
     parser.add_argument("--resume", type=Path, default=None)
