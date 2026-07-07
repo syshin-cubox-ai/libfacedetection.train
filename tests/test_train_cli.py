@@ -77,7 +77,6 @@ def test_train_cli_smoke_saves_checkpoint(monkeypatch: pytest.MonkeyPatch) -> No
         momentum=0.9,
         weight_decay=0.0,
         device="cpu",
-        checkpoint_interval=1,
         eval_interval=1,
         resume=None,
         limit_samples=None,
@@ -91,16 +90,12 @@ def test_train_cli_smoke_saves_checkpoint(monkeypatch: pytest.MonkeyPatch) -> No
 
     train_cli.run_training(args)
 
-    checkpoint = work_dir / "epoch_1.pth"
-    eval_checkpoint = work_dir / "eval_epoch_1.pth"
     latest_checkpoint = work_dir / "latest.pth"
     best_checkpoint = work_dir / "best_loss.pth"
     best_loss_file = work_dir / "best_loss.txt"
     metrics_file = work_dir / "metrics.csv"
     val_metrics_file = work_dir / "val_metrics.csv"
     log_file = work_dir / "train.log"
-    assert checkpoint.exists()
-    assert eval_checkpoint.exists()
     assert latest_checkpoint.exists()
     assert best_checkpoint.exists()
     assert best_loss_file.exists()
@@ -113,19 +108,17 @@ def test_train_cli_smoke_saves_checkpoint(monkeypatch: pytest.MonkeyPatch) -> No
     log_text = log_file.read_text(encoding="utf-8")
     assert "run_started_at" in log_text
     assert "train_dataset samples=1" in log_text
-    assert "saved_checkpoint" in log_text
+    assert "saved_latest_checkpoint" in log_text
+    assert "saved_best_checkpoint" in log_text
     assert "loss_cls" in val_metrics_file.read_text(encoding="utf-8")
-    data = torch.load(checkpoint, map_location="cpu")
     latest_data = torch.load(latest_checkpoint, map_location="cpu")
     best_data = torch.load(best_checkpoint, map_location="cpu")
-    eval_data = torch.load(eval_checkpoint, map_location="cpu")
-    assert data["epoch"] == 1
     assert latest_data["epoch"] == 1
     assert best_data["epoch"] == 1
-    assert "state_dict" in data
-    assert "lr_scheduler" in data
-    assert eval_data["metrics"]["val_loss"] > 0
-    assert best_data["metrics"]["best_loss"] == eval_data["metrics"]["val_loss"]
+    assert "state_dict" in latest_data
+    assert "lr_scheduler" in latest_data
+    assert best_data["metrics"]["val_loss"] > 0
+    assert best_data["metrics"]["best_loss"] == best_data["metrics"]["val_loss"]
     rmtree(work_dir)
 
 
@@ -159,7 +152,6 @@ def test_train_cli_resume_from_latest_checkpoint(monkeypatch: pytest.MonkeyPatch
         momentum=0.9,
         weight_decay=0.0,
         device="cpu",
-        checkpoint_interval=10,
         eval_interval=0,
         resume=None,
         limit_samples=None,

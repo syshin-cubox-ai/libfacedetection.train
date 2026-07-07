@@ -34,7 +34,6 @@ torchrun \
     --batch-size 2 \
     --workers 4 \
     --device cuda \
-    --checkpoint-interval 100 \
     --eval-interval 1 \
     --work-dir "work_dirs/${RUN_NAME}" \
     --wandb-project yunet-train \

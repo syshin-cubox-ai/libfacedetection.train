@@ -222,7 +222,6 @@ def parse_args() -> argparse.Namespace:
         help="Enable fully deterministic training with this base seed "
         "(cuDNN deterministic + torch.use_deterministic_algorithms). Omit for non-deterministic runs.",
     )
-    parser.add_argument("--checkpoint-interval", type=int, default=1)
     parser.add_argument("--eval-interval", type=int, default=100)
     parser.add_argument("--resume", type=Path, default=None)
     parser.add_argument("--limit-samples", type=int, default=None)
@@ -494,18 +493,6 @@ def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
                     lr_scheduler=lr_scheduler,
                 )
                 logger(f"saved_latest_checkpoint path={latest_path}")
-                if epoch % args.checkpoint_interval == 0:
-                    checkpoint_path = args.work_dir / f"epoch_{epoch}.pth"
-                    _save_training_checkpoint(
-                        path=checkpoint_path,
-                        model=model,
-                        optimizer=optimizer,
-                        epoch=epoch,
-                        args=args,
-                        metrics=latest_metrics,
-                        lr_scheduler=lr_scheduler,
-                    )
-                    logger(f"saved_checkpoint path={checkpoint_path}")
             if val_loader is not None and epoch % args.eval_interval == 0:
                 logger(f"start_eval epoch={epoch} steps={len(val_loader)}")
                 val_stats = evaluate_loss(
@@ -550,17 +537,6 @@ def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
                     )
                     if wandb_run is not None:
                         _log_wandb(wandb_run, epoch, val_stats, optimizer, prefix="val")
-                    eval_checkpoint_path = args.work_dir / f"eval_epoch_{epoch}.pth"
-                    _save_training_checkpoint(
-                        path=eval_checkpoint_path,
-                        model=model,
-                        optimizer=optimizer,
-                        epoch=epoch,
-                        args=args,
-                        metrics=val_metrics,
-                        lr_scheduler=lr_scheduler,
-                    )
-                    logger(f"saved_eval_checkpoint path={eval_checkpoint_path}")
                     if is_best:
                         best_metrics = {
                             **val_metrics,

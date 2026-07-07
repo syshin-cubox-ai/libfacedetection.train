@@ -108,7 +108,7 @@ python -m yunet_train.cli.train --variant yunet_s --epochs 1 --batch-size 1 --wo
 Train YuNet_n:
 
 ```shell
-python -m yunet_train.cli.train --variant yunet_n --epochs 640 --batch-size 16 --workers 2 --device cuda --checkpoint-interval 80 --eval-interval 100 --work-dir work_dirs/yunet_n
+python -m yunet_train.cli.train --variant yunet_n --epochs 640 --batch-size 16 --workers 2 --device cuda --eval-interval 100 --work-dir work_dirs/yunet_n
 ```
 
 Resume training:
