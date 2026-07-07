@@ -33,12 +33,11 @@ torchrun \
     --epochs 640 \
     --batch-size 16 \
     --workers 8 \
-    --lr 0.01 \
     --warmup-iters 500 \
+    --no-ema \
+    --grad-clip-norm 1e9 \
     --optimizer musgd \
     --use-rle \
-    --device cuda \
-    --eval-interval 1 \
     --work-dir "work_dirs/${RUN_NAME}" \
     --wandb-project yunet-train \
     --wandb-run-name "${RUN_NAME}"

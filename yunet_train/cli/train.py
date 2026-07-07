@@ -214,7 +214,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--dist-backend", default=None, choices=("nccl", "gloo"))
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--eval-interval", type=int, default=100)
+    parser.add_argument("--eval-interval", type=int, default=1)
     parser.add_argument("--resume", type=Path, default=None)
     parser.add_argument("--limit-samples", type=int, default=None)
     parser.add_argument("--eval-limit-samples", type=int, default=None)

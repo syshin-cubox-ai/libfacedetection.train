@@ -22,10 +22,6 @@ RUN_NAME=$(date +%y%m%d)_yunet26_n_upbatch_lr
 
 echo "job=${SLURM_JOB_ID} node=$(hostname) gpus=${NUM_GPUS}"
 
-# 유효 배치 128 (16 x 8 GPU):
-#   - lr 0.02: 유효 배치 8배 증가분을 일부 보상 (0.03은 warmup 직후 발산 -> NaN 확인됨,
-#     MuSGD는 배치 크기에 덜 민감하므로 full linear scaling 0.08 대신 보수적으로 2배)
-#   - grad-clip-norm 10: 초반 큰 obj gradient로 인한 급발진 방어
 torchrun \
     --nnodes 1 \
     --nproc_per_node "${NUM_GPUS}" \
@@ -39,11 +35,9 @@ torchrun \
     --workers 8 \
     --lr 0.02 \
     --warmup-iters 500 \
-    --grad-clip-norm 10 \
+    --no-ema \
     --optimizer musgd \
     --use-rle \
-    --device cuda \
-    --eval-interval 1 \
     --work-dir "work_dirs/${RUN_NAME}" \
     --wandb-project yunet-train \
     --wandb-run-name "${RUN_NAME}"
