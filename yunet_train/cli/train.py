@@ -21,10 +21,11 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 from yunet_train.engine import (
-    LinearWarmupMultiStepLR,
     ModelEMA,
     MuSGD,
+    WarmupMultiStepLR,
     build_musgd_param_groups,
+    build_sgd_param_groups,
     load_checkpoint,
     save_checkpoint,
 )
@@ -179,8 +180,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lr", type=float, default=0.01)
     parser.add_argument("--lr-steps", type=int, nargs="*", default=[400, 544])
     parser.add_argument("--lr-gamma", type=float, default=0.1)
-    parser.add_argument("--warmup-iters", type=int, default=1500)
-    parser.add_argument("--warmup-ratio", type=float, default=0.001)
+    parser.add_argument(
+        "--warmup-epochs",
+        type=float,
+        default=3.0,
+        help="Ultralytics-style warmup length in epochs (fractions allowed); "
+        "at least 100 iterations are used when positive. 0 disables warmup.",
+    )
+    parser.add_argument(
+        "--warmup-bias-lr",
+        type=float,
+        default=0.1,
+        help="Absolute LR biases start from during warmup (ramps down to the schedule).",
+    )
+    parser.add_argument(
+        "--warmup-momentum",
+        type=float,
+        default=0.8,
+        help="Momentum at the start of warmup (ramps up to --momentum).",
+    )
     parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--weight-decay", type=float, default=5e-4)
     parser.add_argument("--grad-clip-norm", type=float, default=10)
@@ -316,17 +334,74 @@ def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
         )
     else:
         optimizer = torch.optim.SGD(
-            model.parameters(),
+            build_sgd_param_groups(
+                model,
+                lr=args.lr,
+                momentum=args.momentum,
+                weight_decay=args.weight_decay,
+            ),
             lr=args.lr,
             momentum=args.momentum,
             weight_decay=args.weight_decay,
         )
-    lr_scheduler = LinearWarmupMultiStepLR(
+
+    dataset = WIDERFaceDataset(
+        ann_file=args.ann_file,
+        img_prefix=args.img_prefix,
+        transform=build_train_transforms(
+            image_size=args.image_size,
+            crop_choice=get_train_crop_choice(args.variant),
+            min_box_size=args.min_face_size,
+            grayscale_prob=args.grayscale_prob,
+        ),
+    )
+    if args.limit_samples is not None:
+        dataset.records = dataset.records[: args.limit_samples]
+    logger(
+        f"train_dataset samples={len(dataset)} ann_file={args.ann_file} img_prefix={args.img_prefix}"
+    )
+
+    train_sampler = (
+        DistributedSampler(
+            dataset,
+            num_replicas=dist_ctx.world_size,
+            rank=dist_ctx.rank,
+            shuffle=True,
+            seed=seed if seed is not None else 0,
+        )
+        if dist_ctx.enabled
+        else None
+    )
+    data_loader = _build_data_loader(
+        dataset,
+        batch_size=args.batch_size,
+        shuffle=train_sampler is None,
+        sampler=train_sampler,
+        workers=args.workers,
+        prefetch_factor=args.prefetch_factor,
+        persistent_workers=args.workers > 0 and not args.no_persistent_workers,
+        pin_memory=device.type == "cuda" and not args.no_pin_memory,
+        loader_seed=loader_seed,
+    )
+
+    # Ultralytics-style warmup: 3 epochs' worth of iterations, at least 100.
+    warmup_epochs = getattr(args, "warmup_epochs", 3.0)
+    warmup_iters = (
+        max(round(warmup_epochs * len(data_loader)), 100) if warmup_epochs > 0 else 0
+    )
+    lr_scheduler = WarmupMultiStepLR(
         optimizer,
         milestones=tuple(args.lr_steps),
         gamma=args.lr_gamma,
-        warmup_iters=args.warmup_iters,
-        warmup_ratio=args.warmup_ratio,
+        warmup_iters=warmup_iters,
+        warmup_bias_lr=getattr(args, "warmup_bias_lr", 0.1),
+        warmup_momentum=getattr(args, "warmup_momentum", 0.8),
+    )
+    logger(
+        f"lr_scheduler milestones={tuple(args.lr_steps)} gamma={args.lr_gamma} "
+        f"warmup_epochs={warmup_epochs} warmup_iters={warmup_iters} "
+        f"warmup_bias_lr={getattr(args, 'warmup_bias_lr', 0.1)} "
+        f"warmup_momentum={getattr(args, 'warmup_momentum', 0.8)}"
     )
     start_epoch = 1
     best_loss = _read_best_loss(args.work_dir)
@@ -370,44 +445,6 @@ def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
         else criterion
     )
 
-    dataset = WIDERFaceDataset(
-        ann_file=args.ann_file,
-        img_prefix=args.img_prefix,
-        transform=build_train_transforms(
-            image_size=args.image_size,
-            crop_choice=get_train_crop_choice(args.variant),
-            min_box_size=args.min_face_size,
-            grayscale_prob=args.grayscale_prob,
-        ),
-    )
-    if args.limit_samples is not None:
-        dataset.records = dataset.records[: args.limit_samples]
-    logger(
-        f"train_dataset samples={len(dataset)} ann_file={args.ann_file} img_prefix={args.img_prefix}"
-    )
-
-    train_sampler = (
-        DistributedSampler(
-            dataset,
-            num_replicas=dist_ctx.world_size,
-            rank=dist_ctx.rank,
-            shuffle=True,
-            seed=seed if seed is not None else 0,
-        )
-        if dist_ctx.enabled
-        else None
-    )
-    data_loader = _build_data_loader(
-        dataset,
-        batch_size=args.batch_size,
-        shuffle=train_sampler is None,
-        sampler=train_sampler,
-        workers=args.workers,
-        prefetch_factor=args.prefetch_factor,
-        persistent_workers=args.workers > 0 and not args.no_persistent_workers,
-        pin_memory=device.type == "cuda" and not args.no_pin_memory,
-        loader_seed=loader_seed,
-    )
     val_loader = (
         _build_val_loader(args, device, dist_ctx, loader_seed)
         if args.eval_interval > 0
@@ -763,7 +800,7 @@ def _save_training_checkpoint(
     epoch: int,
     args: argparse.Namespace,
     metrics: dict[str, float | None],
-    lr_scheduler: LinearWarmupMultiStepLR,
+    lr_scheduler: WarmupMultiStepLR,
     ema: ModelEMA | None = None,
 ) -> None:
     save_checkpoint(
