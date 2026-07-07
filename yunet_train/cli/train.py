@@ -278,6 +278,11 @@ def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
     loader_seed = None if seed is None else seed + dist_ctx.rank
     use_rle = getattr(args, "use_rle", False)
     model = build_yunet(args.variant, use_kps_sigma=use_rle).to(device)
+    if dist_ctx.enabled and device.type == "cuda":
+        # DDP does not synchronize BatchNorm; with small per-GPU batches the
+        # per-rank statistics get noisy, so compute them over the global batch.
+        model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+        logger("sync_batchnorm enabled")
     train_model: torch.nn.Module = model
     if dist_ctx.enabled:
         device_ids = [dist_ctx.local_rank] if device.type == "cuda" else None
