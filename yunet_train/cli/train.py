@@ -182,6 +182,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--warmup-ratio", type=float, default=0.001)
     parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--weight-decay", type=float, default=5e-4)
+    parser.add_argument(
+        "--grad-clip-norm",
+        type=float,
+        default=None,
+        help="Clip the global gradient norm to this value each step "
+        "(default: no clipping). Guards against divergence with large "
+        "effective batches or high learning rates.",
+    )
     parser.add_argument("--optimizer", default="sgd", choices=("sgd", "musgd"))
     parser.add_argument(
         "--muon-scale",
@@ -416,6 +424,7 @@ def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
                     device=device,
                     epoch=epoch,
                     lr_scheduler=lr_scheduler,
+                    grad_clip_norm=getattr(args, "grad_clip_norm", None),
                     log_interval=args.log_interval,
                     logger=logger,
                     progress_suffix=lambda steps: _format_progress_eta(
