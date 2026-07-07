@@ -22,6 +22,7 @@ from torch.utils.data.distributed import DistributedSampler
 
 from yunet_train.engine import (
     LinearWarmupMultiStepLR,
+    ModelEMA,
     MuSGD,
     build_musgd_param_groups,
     load_checkpoint,
@@ -183,6 +184,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--weight-decay", type=float, default=5e-4)
     parser.add_argument("--grad-clip-norm", type=float, default=10)
+    parser.add_argument(
+        "--no-ema",
+        action="store_true",
+        help="Disable the exponential moving average of model weights "
+        "(EMA is used for validation and the best checkpoint).",
+    )
+    parser.add_argument("--ema-decay", type=float, default=0.9999)
+    parser.add_argument("--ema-tau", type=float, default=2000.0)
     parser.add_argument("--optimizer", default="sgd", choices=("sgd", "musgd"))
     parser.add_argument(
         "--muon-scale",
@@ -321,6 +330,7 @@ def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
     )
     start_epoch = 1
     best_loss = _read_best_loss(args.work_dir)
+    checkpoint: dict[str, Any] | None = None
     if args.resume is not None:
         checkpoint = load_checkpoint(
             args.resume,
@@ -339,6 +349,26 @@ def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
             f"start_epoch={start_epoch} "
             f"best_loss={best_loss if best_loss is not None else 'none'}"
         )
+
+    ema: ModelEMA | None = None
+    if not getattr(args, "no_ema", False):
+        ema = ModelEMA(
+            model,
+            decay=getattr(args, "ema_decay", 0.9999),
+            tau=getattr(args, "ema_tau", 2000.0),
+        )
+        if checkpoint is not None and "ema" in checkpoint:
+            ema.load_state_dict(checkpoint["ema"])
+            logger(f"resumed_ema updates={ema.updates}")
+        logger(f"ema enabled decay={ema.decay} tau={ema.tau}")
+    # Validation and the best checkpoint use the EMA weights (Ultralytics
+    # semantics); the RLE criterion must then also read the EMA flow model.
+    eval_model: torch.nn.Module = ema.ema if ema is not None else train_model
+    eval_criterion = (
+        YuNetCriterion(strides=(8, 16, 32), flow_model=ema.ema.bbox_head.flow_model)
+        if ema is not None and use_rle
+        else criterion
+    )
 
     dataset = WIDERFaceDataset(
         ann_file=args.ann_file,
@@ -425,6 +455,7 @@ def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
                     epoch=epoch,
                     lr_scheduler=lr_scheduler,
                     grad_clip_norm=getattr(args, "grad_clip_norm", None),
+                    ema=ema,
                     log_interval=args.log_interval,
                     logger=logger,
                     progress_suffix=lambda steps: _format_progress_eta(
@@ -496,13 +527,14 @@ def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
                     args=args,
                     metrics=latest_metrics,
                     lr_scheduler=lr_scheduler,
+                    ema=ema,
                 )
                 logger(f"saved_latest_checkpoint path={latest_path}")
             if val_loader is not None and epoch % args.eval_interval == 0:
                 logger(f"start_eval epoch={epoch} steps={len(val_loader)}")
                 val_stats = evaluate_loss(
-                    model=train_model,
-                    criterion=criterion,
+                    model=eval_model,
+                    criterion=eval_criterion,
                     data_loader=val_loader,
                     device=device,
                 )
@@ -548,14 +580,17 @@ def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
                             "best_loss": best_loss,
                         }
                         best_path = args.work_dir / "best_loss.pth"
+                        # The best checkpoint stores the weights that were
+                        # actually validated: EMA weights when EMA is enabled.
                         _save_training_checkpoint(
                             path=best_path,
-                            model=model,
+                            model=ema.ema if ema is not None else model,
                             optimizer=optimizer,
                             epoch=epoch,
                             args=args,
                             metrics=best_metrics,
                             lr_scheduler=lr_scheduler,
+                            ema=ema,
                         )
                         _write_best_loss(
                             args.work_dir, best_loss=val_stats.loss, epoch=epoch
@@ -729,6 +764,7 @@ def _save_training_checkpoint(
     args: argparse.Namespace,
     metrics: dict[str, float | None],
     lr_scheduler: LinearWarmupMultiStepLR,
+    ema: ModelEMA | None = None,
 ) -> None:
     save_checkpoint(
         path=path,
@@ -738,6 +774,7 @@ def _save_training_checkpoint(
         config=_serializable_config(args),
         metrics={key: value for key, value in metrics.items() if value is not None},
         scheduler_state=lr_scheduler.state_dict(),
+        extra_state=None if ema is None else {"ema": ema.state_dict()},
     )
 
 

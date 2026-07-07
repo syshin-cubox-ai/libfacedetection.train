@@ -117,6 +117,8 @@ def test_train_cli_smoke_saves_checkpoint(monkeypatch: pytest.MonkeyPatch) -> No
     assert best_data["epoch"] == 1
     assert "state_dict" in latest_data
     assert "lr_scheduler" in latest_data
+    assert "ema" in latest_data
+    assert latest_data["ema"]["updates"] == 1
     assert best_data["metrics"]["val_loss"] > 0
     assert best_data["metrics"]["best_loss"] == best_data["metrics"]["val_loss"]
     rmtree(work_dir)

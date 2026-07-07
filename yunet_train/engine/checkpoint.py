@@ -47,6 +47,7 @@ def save_checkpoint(
     config: dict[str, Any],
     metrics: dict[str, float],
     scheduler_state: dict[str, Any] | None = None,
+    extra_state: dict[str, Any] | None = None,
 ) -> None:
     checkpoint_path = Path(path)
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
@@ -59,6 +60,8 @@ def save_checkpoint(
     }
     if scheduler_state is not None:
         checkpoint["lr_scheduler"] = scheduler_state
+    if extra_state is not None:
+        checkpoint.update(extra_state)
     torch.save(checkpoint, checkpoint_path)
 
 

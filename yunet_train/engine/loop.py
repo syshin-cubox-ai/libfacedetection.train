@@ -12,6 +12,11 @@ class LRScheduler(Protocol):
         ...
 
 
+class WeightAverager(Protocol):
+    def update(self, model: torch.nn.Module) -> None:
+        ...
+
+
 def train_loss_epoch(
     *,
     model: torch.nn.Module,
@@ -24,6 +29,7 @@ def train_loss_epoch(
     epoch: int = 1,
     lr_scheduler: LRScheduler | None = None,
     grad_clip_norm: float | None = None,
+    ema: WeightAverager | None = None,
     log_interval: int = 0,
     logger: Callable[[str], None] | None = None,
     format_log: Callable[[int, int, int, dict[str, float]], str] | None = None,
@@ -43,6 +49,8 @@ def train_loss_epoch(
         if grad_clip_norm is not None:
             torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
         optimizer.step()
+        if ema is not None:
+            ema.update(model)
 
         steps += 1
         _accumulate(totals, losses, loss, loss_names)

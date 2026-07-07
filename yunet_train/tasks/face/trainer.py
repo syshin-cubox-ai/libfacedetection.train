@@ -7,7 +7,7 @@ from typing import Any, Protocol
 import torch
 from torch.utils.data import DataLoader
 
-from yunet_train.engine.loop import LRScheduler, evaluate_loss_epoch, train_loss_epoch
+from yunet_train.engine.loop import LRScheduler, WeightAverager, evaluate_loss_epoch, train_loss_epoch
 
 from .types import FaceBatch
 
@@ -60,6 +60,7 @@ def train_one_epoch(
     epoch: int = 1,
     lr_scheduler: LRScheduler | None = None,
     grad_clip_norm: float | None = None,
+    ema: WeightAverager | None = None,
     log_interval: int = 0,
     logger: Callable[[str], None] | None = None,
     progress_suffix: Callable[[int], str] | None = None,
@@ -79,6 +80,7 @@ def train_one_epoch(
         epoch=epoch,
         lr_scheduler=lr_scheduler,
         grad_clip_norm=grad_clip_norm,
+        ema=ema,
         log_interval=log_interval,
         logger=logger,
         format_log=format_log,
