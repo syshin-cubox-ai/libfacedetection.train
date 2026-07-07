@@ -29,6 +29,7 @@ dist/
 .DS_Store
 
 # Logs and runtime outputs
+logs/
 *.log
 *.log.json
 eval/

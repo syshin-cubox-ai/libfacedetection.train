@@ -32,7 +32,7 @@ torchrun \
     --image-size 640 \
     --epochs 640 \
     --batch-size 2 \
-    --workers 4 \
+    --workers 1 \
     --device cuda \
     --eval-interval 1 \
     --work-dir "work_dirs/${RUN_NAME}" \
