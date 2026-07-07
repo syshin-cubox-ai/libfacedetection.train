@@ -12,7 +12,7 @@ from .evaluation import (
     write_widerface_predictions,
 )
 from .head import YuNetHead
-from .model import YuNet, build_yunet
+from .model import YuNet, build_yunet, clean_inference_state_dict
 from .paths import (
     DATA_ROOT,
     REPO_ROOT,
@@ -63,6 +63,7 @@ __all__ = [
     "YuNetHead",
     "YuNet",
     "build_yunet",
+    "clean_inference_state_dict",
     "DATA_ROOT",
     "REPO_ROOT",
     "WIDERFACE_ROOT",

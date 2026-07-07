@@ -57,3 +57,22 @@ def build_yunet(
 ) -> YuNet:
     return YuNet(get_model_config(variant), use_kps_sigma=use_kps_sigma)
 
+
+# Parameters that only exist while training with the RLE keypoint loss
+# (--use-rle); inference never reads them, so checkpoint loaders drop them.
+TRAINING_ONLY_KEY_PREFIXES = (
+    "bbox_head.multi_level_kps_sigma.",
+    "bbox_head.flow_model.",
+)
+
+
+def clean_inference_state_dict(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+    cleaned = {}
+    for key, value in state_dict.items():
+        if key.startswith("module."):
+            key = key[len("module.") :]
+        if key.startswith(TRAINING_ONLY_KEY_PREFIXES):
+            continue
+        cleaned[key] = value
+    return cleaned
+

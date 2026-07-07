@@ -7,8 +7,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from yunet_train.tasks.face import build_yunet
-from yunet_train.engine import load_checkpoint
+from yunet_train.tasks.face import build_yunet, clean_inference_state_dict
 
 
 def parse_args() -> argparse.Namespace:
@@ -30,7 +29,8 @@ def export_cpp(args: argparse.Namespace) -> Path:
     checkpoint = torch.load(args.checkpoint, map_location="cpu")
     variant = args.variant or checkpoint.get("config", {}).get("variant", "yunet_n")
     model = build_yunet(variant)
-    load_checkpoint(args.checkpoint, model=model, map_location="cpu")
+    state_dict = clean_inference_state_dict(checkpoint.get("state_dict", checkpoint))
+    model.load_state_dict(state_dict, strict=True)
     model.eval()
 
     output_file = args.output_file

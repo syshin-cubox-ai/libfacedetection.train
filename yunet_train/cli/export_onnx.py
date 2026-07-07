@@ -6,7 +6,7 @@ from pathlib import Path
 import torch
 
 from yunet_train.engine.onnx_export import export_model_to_onnx, parse_input_shape
-from yunet_train.tasks.face import build_yunet
+from yunet_train.tasks.face import build_yunet, clean_inference_state_dict
 
 
 def parse_args() -> argparse.Namespace:
@@ -42,6 +42,7 @@ def export_onnx(args: argparse.Namespace) -> Path:
         opset_version=args.opset_version,
         dynamic_export=args.dynamic_export,
         verify=args.verify,
+        clean_state_dict=clean_inference_state_dict,
     )
 
 

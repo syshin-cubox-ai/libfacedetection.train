@@ -22,11 +22,16 @@ def export_model_to_onnx(
     opset_version: int,
     dynamic_export: bool,
     verify: bool,
+    clean_state_dict: Callable[[dict[str, torch.Tensor]], dict[str, torch.Tensor]] | None = None,
 ) -> Path:
     checkpoint = torch.load(checkpoint_path, map_location="cpu")
     resolved_variant = variant or checkpoint.get("config", {}).get("variant", "yunet_n")
     model = build_model(resolved_variant)
-    load_checkpoint(checkpoint_path, model=model, map_location="cpu")
+    if clean_state_dict is not None:
+        state_dict = clean_state_dict(checkpoint.get("state_dict", checkpoint))
+        model.load_state_dict(state_dict, strict=True)
+    else:
+        load_checkpoint(checkpoint_path, model=model, map_location="cpu")
     model.to(device).eval()
 
     output_file.parent.mkdir(parents=True, exist_ok=True)

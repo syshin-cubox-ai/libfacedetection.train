@@ -18,6 +18,7 @@ from yunet_train.tasks.face import (
     add_prediction,
     build_eval_transforms,
     build_yunet,
+    clean_inference_state_dict,
     collate_face_samples,
     detections_to_widerface,
     move_batch_to_device,
@@ -60,8 +61,8 @@ def run_evaluation(args: argparse.Namespace):
     checkpoint = torch.load(args.checkpoint, map_location="cpu")
     variant = args.variant or checkpoint.get("config", {}).get("variant", "yunet_n")
     model = build_yunet(variant)
-    state_dict = checkpoint.get("state_dict", checkpoint)
-    missing_keys, unexpected_keys = model.load_state_dict(_clean_state_dict(state_dict), strict=False)
+    state_dict = clean_inference_state_dict(checkpoint.get("state_dict", checkpoint))
+    missing_keys, unexpected_keys = model.load_state_dict(state_dict, strict=False)
     if missing_keys or unexpected_keys:
         raise RuntimeError(
             "checkpoint does not match model variant "
@@ -130,15 +131,6 @@ def collect_predictions(
             boxes = detections_to_widerface(result, meta)
             add_prediction(predictions, meta["filename"], boxes)
     return predictions
-
-
-def _clean_state_dict(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-    cleaned = {}
-    for key, value in state_dict.items():
-        if key.startswith("module."):
-            key = key[len("module.") :]
-        cleaned[key] = value
-    return cleaned
 
 
 if __name__ == "__main__":
