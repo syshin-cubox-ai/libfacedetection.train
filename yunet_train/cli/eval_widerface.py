@@ -9,11 +9,11 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from yunet_train.tasks.face import (
-    PredictionDict,
-    WIDERFaceDataset,
     WIDER_VAL_ANN_FILE,
     WIDER_VAL_GT_DIR,
     WIDER_VAL_IMAGE_DIR,
+    PredictionDict,
+    WIDERFaceDataset,
     YuNetPostprocessor,
     add_prediction,
     build_eval_transforms,
@@ -28,21 +28,23 @@ from yunet_train.tasks.face import (
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Evaluate a YuNet checkpoint on WIDER Face val.")
+    parser = argparse.ArgumentParser(
+        description="Evaluate a YuNet checkpoint on WIDER Face val."
+    )
     parser.add_argument("checkpoint", type=Path)
     parser.add_argument("--variant", choices=("yunet_n", "yunet_s"), default=None)
     parser.add_argument("--ann-file", type=Path, default=WIDER_VAL_ANN_FILE)
     parser.add_argument("--img-prefix", type=Path, default=WIDER_VAL_IMAGE_DIR)
     parser.add_argument("--gt-dir", type=Path, default=WIDER_VAL_GT_DIR)
-    parser.add_argument("--output-dir", type=Path, default=Path("work_dirs/widerface_eval"))
-    parser.add_argument("--mode", choices=("origin", "resize"), default="origin")
+    parser.add_argument("--output-dir", type=Path, default=Path("eval"))
+    parser.add_argument("--mode", choices=("origin", "resize"), default="resize")
     parser.add_argument("--image-size", type=int, default=640)
     parser.add_argument("--size-divisor", type=int, default=32)
     parser.add_argument("--batch-size", type=int, default=1)
-    parser.add_argument("--workers", type=int, default=2)
-    parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
-    parser.add_argument("--score-threshold", type=float, default=0.02)
-    parser.add_argument("--nms-threshold", type=float, default=0.45)
+    parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--device", default="cuda")
+    parser.add_argument("--score-threshold", type=float, default=0.001)
+    parser.add_argument("--nms-threshold", type=float, default=0.7)
     parser.add_argument("--max-detections", type=int, default=-1)
     parser.add_argument("--iou-threshold", type=float, default=0.5)
     parser.add_argument("--limit-samples", type=int, default=None)
@@ -53,7 +55,9 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     aps = run_evaluation(args)
-    print(f"WIDERFace AP easy={aps.easy:.6f} medium={aps.medium:.6f} hard={aps.hard:.6f}")
+    print(
+        f"WIDERFace AP easy={aps.easy:.6f} medium={aps.medium:.6f} hard={aps.hard:.6f}"
+    )
 
 
 def run_evaluation(args: argparse.Namespace):
@@ -93,11 +97,17 @@ def run_evaluation(args: argparse.Namespace):
     )
     collect_start = perf_counter()
     predictions = collect_predictions(model, postprocessor, data_loader, device)
-    print(f"Collected predictions for {len(dataset)} images in {perf_counter() - collect_start:.2f}s", flush=True)
+    print(
+        f"Collected predictions for {len(dataset)} images in {perf_counter() - collect_start:.2f}s",
+        flush=True,
+    )
     if args.save_preds:
         write_start = perf_counter()
         write_widerface_predictions(predictions, args.output_dir / "predictions")
-        print(f"Wrote WIDER Face predictions in {perf_counter() - write_start:.2f}s", flush=True)
+        print(
+            f"Wrote WIDER Face predictions in {perf_counter() - write_start:.2f}s",
+            flush=True,
+        )
     eval_start = perf_counter()
     print("Computing WIDER Face AP for easy/medium/hard splits...", flush=True)
     aps = wider_evaluation(predictions, args.gt_dir, iou_thresh=args.iou_threshold)
