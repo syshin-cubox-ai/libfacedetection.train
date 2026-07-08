@@ -42,23 +42,23 @@ def wider_evaluation(
 def detections_to_widerface(
     result: DetectionResult, meta: dict[str, Any]
 ) -> np.ndarray:
-    boxes = result.boxes.detach().cpu().float().numpy().copy()
-    scores = result.scores.detach().cpu().float().numpy().reshape(-1, 1)
+    boxes = result.boxes.detach().cpu().numpy().astype(np.float64)
+    scores = result.scores.detach().cpu().numpy().astype(np.float64).reshape(-1, 1)
     if boxes.size == 0:
-        return np.zeros((0, 5), dtype=np.float32)
+        return np.zeros((0, 5), dtype=np.float64)
 
     scale_factor = meta.get("scale_factor")
     if scale_factor is None:
-        scale_factor = np.ones((4,), dtype=np.float32)
+        scale_factor = np.ones((4,), dtype=np.float64)
     else:
-        scale_factor = np.asarray(scale_factor, dtype=np.float32)
+        scale_factor = np.asarray(scale_factor, dtype=np.float64)
     boxes[:, 0::2] /= scale_factor[0::2]
     boxes[:, 1::2] /= scale_factor[1::2]
 
     widths = boxes[:, 2] - boxes[:, 0]
     heights = boxes[:, 3] - boxes[:, 1]
     xywh = np.stack((boxes[:, 0], boxes[:, 1], widths, heights), axis=1)
-    return np.concatenate((xywh, scores), axis=1).astype(np.float32)
+    return np.concatenate((xywh, scores), axis=1)
 
 
 def add_prediction(
@@ -68,7 +68,7 @@ def add_prediction(
     event_name = image_path.parent.as_posix()
     image_name = image_path.stem
     predictions.setdefault(event_name, {})[image_name] = boxes.astype(
-        np.float32, copy=False
+        np.float64, copy=False
     )
 
 
@@ -245,9 +245,9 @@ def _evaluate_setting(
         for image_idx in range(len(image_list)):
             image_name = str(image_list[image_idx][0][0])
             pred_info = event_predictions.get(
-                image_name, np.zeros((0, 5), dtype=np.float32)
+                image_name, np.zeros((0, 5), dtype=np.float64)
             )
-            gt_boxes = gt_bbx_list[image_idx][0].astype(np.float32)
+            gt_boxes = gt_bbx_list[image_idx][0].astype(np.float64)
             keep_index = np.asarray(sub_gt_list[image_idx][0], dtype=np.int64).reshape(
                 -1
             )
