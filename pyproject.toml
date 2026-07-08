@@ -10,18 +10,18 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "numpy",
-    "opencv-python",
-    "tqdm",
-    "PyYAML",
-    "wandb",
-    "scipy",
     "onnx",
     "onnxruntime-gpu==1.26.0",
+    "onnx-tool",
+    "opencv-python",
     "pytest",
     "pycocotools",
-    "onnx2tf",
+    "PyYAML",
+    "scipy",
     "torch>=2.12.1",
     "torchvision>=0.27.1",
+    "tqdm",
+    "wandb",
 ]
 
 [project.scripts]
