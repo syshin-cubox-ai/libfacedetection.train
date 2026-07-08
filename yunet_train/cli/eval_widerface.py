@@ -45,7 +45,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--score-threshold", type=float, default=0.001)
     parser.add_argument("--nms-threshold", type=float, default=0.7)
-    parser.add_argument("--max-detections", type=int, default=-1)
+    parser.add_argument("--max-detections", type=int, default=3000)
     parser.add_argument("--iou-threshold", type=float, default=0.5)
     parser.add_argument("--limit-samples", type=int, default=None)
     parser.add_argument("--save-preds", action="store_true")
