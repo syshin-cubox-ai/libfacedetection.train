@@ -7,7 +7,7 @@ This repository provides a lightweight PyTorch training pipeline for YuNet-based
 It includes:
 
 - YuNet face detection training on WIDER Face.
-- YuNet face evaluation and export for ONNX, C++ weights, and TFLite.
+- YuNet face evaluation and export for ONNX and C++ weights.
 - YuNet pose detection training for YOLO-pose style datasets.
 - Pose validation, COCO keypoint AP evaluation, visualization, and ONNX export.
 
@@ -16,7 +16,7 @@ The code is implemented directly with PyTorch. It does not require MMDetection, 
 ## Why Use This Repository
 
 - Lightweight: small YuNet-style models and direct PyTorch training code.
-- Practical exports: face models can be exported to ONNX, TFLite, and libfacedetection C++ weight data.
+- Practical exports: face models can be exported to ONNX and libfacedetection C++ weight data.
 - Multi-task structure: face and pose are separate task implementations sharing the same YuNet backbone, neck, training utilities, assignment, priors, bbox losses, and NMS.
 - Easy to inspect: datasets, transforms, models, losses, training loops, and evaluation code are plain Python modules.
 - CI-friendly: most workflows have CPU smoke tests and small-sample modes.
@@ -63,7 +63,6 @@ Optional dependencies:
 
 ```shell
 python -m pip install -e ".[pose]"          # COCO keypoint evaluation
-python -m pip install -r requirements-tflite.txt
 ```
 
 `torch` is intentionally not pinned by this repository, so installing the package will not replace the PyTorch build in your environment.
@@ -165,12 +164,6 @@ Export dynamic-shape ONNX:
 
 ```shell
 python -m yunet_train.cli.export_onnx work_dirs/yunet_n/best_loss.pth --variant yunet_n --dynamic-export --output-file work_dirs/export/yunet_n_dynamic.onnx
-```
-
-Export TFLite:
-
-```shell
-python -m yunet_train.cli.export_tflite work_dirs/yunet_n/best_loss.pth --variant yunet_n --shape 640 640 --output-file work_dirs/export/yunet_n_640_640.tflite
 ```
 
 The face ONNX output order follows the original YuNet convention:
@@ -289,7 +282,6 @@ yunet-eval-pose-coco
 yunet-export-onnx
 yunet-export-pose-onnx
 yunet-export-cpp
-yunet-export-tflite
 yunet-compare-inference
 yunet-check-widerface
 yunet-check-env
