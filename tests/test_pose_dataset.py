@@ -10,14 +10,20 @@ import pytest
 import torch
 from torch.utils.data import DataLoader
 
-from yunet_train.tasks.pose import YOLOPoseDataset, build_pose_train_transforms, collate_pose_samples
+from yunet_train.tasks.pose import (
+    YOLOPoseDataset,
+    build_pose_train_transforms,
+    collate_pose_samples,
+)
 
 
 def _coco8_pose_root() -> Path:
     return COCO8_POSE_ROOT
 
 
-@pytest.mark.skipif(not _coco8_pose_root().exists(), reason="data/coco8-pose is not available")
+@pytest.mark.skipif(
+    not _coco8_pose_root().exists(), reason="data/coco8-pose is not available"
+)
 def test_yolo_pose_dataset_loads_coco8_pose_labels() -> None:
     dataset = YOLOPoseDataset(_coco8_pose_root(), split="train")
 
@@ -35,10 +41,22 @@ def test_yolo_pose_dataset_loads_coco8_pose_labels() -> None:
     assert set(sample.keypoints[..., 2].reshape(-1).tolist()) <= {0.0, 1.0, 2.0}
 
 
-@pytest.mark.skipif(not _coco8_pose_root().exists(), reason="data/coco8-pose is not available")
+@pytest.mark.skipif(
+    not _coco8_pose_root().exists(), reason="data/coco8-pose is not available"
+)
 def test_yolo_pose_dataset_collates_training_batch() -> None:
-    dataset = YOLOPoseDataset(_coco8_pose_root(), split="train", transform=build_pose_train_transforms(image_size=128, random_crop=False))
-    loader = DataLoader(dataset, batch_size=2, shuffle=False, num_workers=0, collate_fn=collate_pose_samples)
+    dataset = YOLOPoseDataset(
+        _coco8_pose_root(),
+        split="train",
+        transform=build_pose_train_transforms(image_size=128, random_crop=False),
+    )
+    loader = DataLoader(
+        dataset,
+        batch_size=2,
+        shuffle=False,
+        num_workers=0,
+        collate_fn=collate_pose_samples,
+    )
     batch = next(iter(loader))
 
     assert isinstance(batch.images, torch.Tensor)

@@ -10,7 +10,9 @@ def test_pose_postprocessor_decodes_boxes_scores_and_keypoints() -> None:
     bbox_preds = [torch.zeros(1, 4, 1, 1)]
     objectnesses = [torch.full((1, 1, 1, 1), 10.0)]
     kpt_preds = [torch.zeros(1, 51, 1, 1)]
-    postprocessor = YuNetPosePostprocessor(strides=(8,), score_threshold=0.1, kpt_shape=(17, 3))
+    postprocessor = YuNetPosePostprocessor(
+        strides=(8,), score_threshold=0.1, kpt_shape=(17, 3)
+    )
 
     results = postprocessor((cls_scores, bbox_preds, objectnesses, kpt_preds))
 

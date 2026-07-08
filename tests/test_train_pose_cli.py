@@ -16,7 +16,9 @@ def _coco8_pose_root() -> Path:
     return COCO8_POSE_ROOT
 
 
-@pytest.mark.skipif(not _coco8_pose_root().exists(), reason="data/coco8-pose is not available")
+@pytest.mark.skipif(
+    not _coco8_pose_root().exists(), reason="data/coco8-pose is not available"
+)
 def test_train_pose_cli_smoke_saves_checkpoint() -> None:
     work_dir = Path(__file__).resolve().parent / "output" / "train_pose_cli_smoke"
     if work_dir.exists():
@@ -82,7 +84,9 @@ def test_train_pose_cli_smoke_saves_checkpoint() -> None:
     rmtree(work_dir)
 
 
-@pytest.mark.skipif(not _coco8_pose_root().exists(), reason="data/coco8-pose is not available")
+@pytest.mark.skipif(
+    not _coco8_pose_root().exists(), reason="data/coco8-pose is not available"
+)
 def test_train_pose_cli_resumes_from_latest_checkpoint() -> None:
     work_dir = Path(__file__).resolve().parent / "output" / "train_pose_cli_resume"
     if work_dir.exists():
@@ -138,9 +142,15 @@ def test_train_pose_cli_resumes_from_latest_checkpoint() -> None:
     rmtree(work_dir)
 
 
-@pytest.mark.skipif(not _coco8_pose_root().exists(), reason="data/coco8-pose is not available")
+@pytest.mark.skipif(
+    not _coco8_pose_root().exists(), reason="data/coco8-pose is not available"
+)
 def test_train_pose_cli_checkpoint_interval_zero_disables_epoch_checkpoint() -> None:
-    work_dir = Path(__file__).resolve().parent / "output" / "train_pose_cli_no_epoch_checkpoint"
+    work_dir = (
+        Path(__file__).resolve().parent
+        / "output"
+        / "train_pose_cli_no_epoch_checkpoint"
+    )
     if work_dir.exists():
         rmtree(work_dir)
     args = argparse.Namespace(

@@ -50,4 +50,3 @@ def _meta_from_sample(sample: FaceSample) -> dict[str, Any]:
         "flip_direction": sample.flip_direction,
         "img_norm_cfg": sample.image_norm,
     }
-

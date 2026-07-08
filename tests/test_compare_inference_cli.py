@@ -5,7 +5,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from yunet_train.cli.compare_inference import SCRFD, _parse_input_size, resize_image, xyxy_score_to_xywh_score
+from yunet_train.cli.compare_inference import (
+    SCRFD,
+    _parse_input_size,
+    resize_image,
+    xyxy_score_to_xywh_score,
+)
 
 
 def test_resize_image_auto_pads_to_stride_32() -> None:
@@ -42,7 +47,9 @@ def test_parse_input_size_rejects_invalid_mode() -> None:
 
 def test_scrfd_anchor_centers_returns_uncached_centers_after_cache_limit() -> None:
     detector = SCRFD.__new__(SCRFD)
-    detector.center_cache = {(idx, idx, 8): np.zeros((1, 2), dtype=np.float32) for idx in range(100)}
+    detector.center_cache = {
+        (idx, idx, 8): np.zeros((1, 2), dtype=np.float32) for idx in range(100)
+    }
     detector.num_anchors = 2
 
     centers = detector._anchor_centers(68, 64, 16)

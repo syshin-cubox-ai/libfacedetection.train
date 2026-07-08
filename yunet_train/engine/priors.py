@@ -21,7 +21,9 @@ class MlvlPointGenerator:
         with_stride: bool = True,
     ) -> list[torch.Tensor]:
         if len(featmap_sizes) != self.num_levels:
-            raise ValueError(f"Expected {self.num_levels} feature maps, got {len(featmap_sizes)}")
+            raise ValueError(
+                f"Expected {self.num_levels} feature maps, got {len(featmap_sizes)}"
+            )
 
         return [
             self.single_level_grid_priors(
@@ -56,5 +58,6 @@ class MlvlPointGenerator:
             return torch.stack([shift_xx, shift_yy], dim=-1)
         stride_w_tensor = shift_xx.new_full((shift_xx.shape[0],), stride_w).to(dtype)
         stride_h_tensor = shift_yy.new_full((shift_yy.shape[0],), stride_h).to(dtype)
-        return torch.stack([shift_xx, shift_yy, stride_w_tensor, stride_h_tensor], dim=-1)
-
+        return torch.stack(
+            [shift_xx, shift_yy, stride_w_tensor, stride_h_tensor], dim=-1
+        )

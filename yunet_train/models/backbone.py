@@ -36,4 +36,3 @@ class YuNetBackbone(nn.Module):
             if i in self.downsample_idx:
                 x = F.max_pool2d(x, 2)
         return out
-

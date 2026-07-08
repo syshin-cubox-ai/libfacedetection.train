@@ -52,7 +52,12 @@ class Resize:
         sample.image_shape = resized.shape
         sample.pad_shape = resized.shape
         sample.scale_factor = scale_factor
-        sample.boxes = _scale_boxes(_ensure_numpy_array(sample.boxes), scale_factor, resized.shape, self.clip_border)
+        sample.boxes = _scale_boxes(
+            _ensure_numpy_array(sample.boxes),
+            scale_factor,
+            resized.shape,
+            self.clip_border,
+        )
         sample.keypoints = _scale_keypoints(
             _ensure_numpy_array(sample.keypoints),
             w_scale,
@@ -75,7 +80,9 @@ class RandomSquareCrop:
         pad_value: float = 114,
     ):
         if (crop_ratio_range is None) == (crop_choice is None):
-            raise ValueError("exactly one of crop_ratio_range or crop_choice must be set")
+            raise ValueError(
+                "exactly one of crop_ratio_range or crop_choice must be set"
+            )
         self.crop_ratio_range = crop_ratio_range
         self.crop_choice = tuple(crop_choice) if crop_choice is not None else None
         self.clip_border = clip_border
@@ -89,7 +96,11 @@ class RandomSquareCrop:
 
         height, width = image.shape[:2]
         scale_retry = 0
-        max_scale = self.crop_ratio_range[1] if self.crop_ratio_range is not None else max(self.crop_choice)
+        max_scale = (
+            self.crop_ratio_range[1]
+            if self.crop_ratio_range is not None
+            else max(self.crop_choice)
+        )
         scale = None
 
         while True:
@@ -120,16 +131,24 @@ class RandomSquareCrop:
                 else:
                     top = np.random.randint(height - crop_h, 0)
 
-                patch = np.array((left, top, left + crop_w, top + crop_h), dtype=np.int64)
+                patch = np.array(
+                    (left, top, left + crop_w, top + crop_h), dtype=np.int64
+                )
                 keep = _centers_in_patch(boxes, patch)
                 if not keep.any():
                     continue
 
-                sample.boxes = _crop_boxes_after_patch(boxes, patch, keep, self.clip_border)
+                sample.boxes = _crop_boxes_after_patch(
+                    boxes, patch, keep, self.clip_border
+                )
                 sample.labels = _ensure_numpy_array(sample.labels)[keep]
-                sample.keypoints = _crop_keypoints_after_patch(_ensure_numpy_array(sample.keypoints), patch, keep)
+                sample.keypoints = _crop_keypoints_after_patch(
+                    _ensure_numpy_array(sample.keypoints), patch, keep
+                )
 
-                sample.image = _crop_image_with_padding_pose(image, patch, crop_h, crop_w, self.pad_value)
+                sample.image = _crop_image_with_padding_pose(
+                    image, patch, crop_h, crop_w, self.pad_value
+                )
                 sample.image_shape = sample.image.shape
                 sample.pad_shape = sample.image.shape
                 return sample
@@ -177,14 +196,18 @@ class RandomHorizontalFlip:
         width = image.shape[1]
         sample.image = np.flip(image, axis=1).copy()
         sample.boxes = _flip_boxes(_ensure_numpy_array(sample.boxes), width)
-        sample.keypoints = _flip_keypoints(_ensure_numpy_array(sample.keypoints), width, self.flip_idx)
+        sample.keypoints = _flip_keypoints(
+            _ensure_numpy_array(sample.keypoints), width, self.flip_idx
+        )
         sample.flip = True
         sample.flip_direction = "horizontal"
         return sample
 
 
 class Normalize:
-    def __init__(self, mean: Sequence[float], std: Sequence[float], *, to_rgb: bool = False):
+    def __init__(
+        self, mean: Sequence[float], std: Sequence[float], *, to_rgb: bool = False
+    ):
         self.mean = np.array(mean, dtype=np.float32)
         self.std = np.array(std, dtype=np.float32)
         self.to_rgb = to_rgb
@@ -227,9 +250,13 @@ class Pad:
             target_w = int(np.ceil(width / self.size_divisor)) * self.size_divisor
 
         if target_h < height or target_w < width:
-            raise ValueError(f"pad target {(target_w, target_h)} is smaller than image {(width, height)}")
+            raise ValueError(
+                f"pad target {(target_w, target_h)} is smaller than image {(width, height)}"
+            )
 
-        padded = np.full((target_h, target_w, image.shape[2]), self.pad_value, dtype=image.dtype)
+        padded = np.full(
+            (target_h, target_w, image.shape[2]), self.pad_value, dtype=image.dtype
+        )
         padded[:height, :width] = image
         sample.image = padded
         sample.pad_shape = padded.shape
@@ -239,10 +266,14 @@ class Pad:
 class ToTensor:
     def __call__(self, sample: PoseSample) -> PoseSample:
         image = _ensure_numpy_image(sample.image)
-        sample.image = torch.from_numpy(np.ascontiguousarray(image.transpose(2, 0, 1))).float()
+        sample.image = torch.from_numpy(
+            np.ascontiguousarray(image.transpose(2, 0, 1))
+        ).float()
         sample.boxes = torch.from_numpy(np.ascontiguousarray(sample.boxes)).float()
         sample.labels = torch.from_numpy(np.ascontiguousarray(sample.labels)).long()
-        sample.keypoints = torch.from_numpy(np.ascontiguousarray(sample.keypoints)).float()
+        sample.keypoints = torch.from_numpy(
+            np.ascontiguousarray(sample.keypoints)
+        ).float()
         return sample
 
 
@@ -257,7 +288,9 @@ def build_pose_train_transforms(
 ) -> Compose:
     blocks: list[Callable[[PoseSample], PoseSample]] = []
     if random_crop:
-        blocks.append(RandomSquareCrop(crop_choice=tuple(crop_choice), pad_value=crop_pad_value))
+        blocks.append(
+            RandomSquareCrop(crop_choice=tuple(crop_choice), pad_value=crop_pad_value)
+        )
     blocks.extend(
         [
             Resize((image_size, image_size), keep_ratio=True),
@@ -284,7 +317,9 @@ def build_pose_eval_transforms(image_size: int = 640) -> Compose:
 
 def _ensure_numpy_image(image: np.ndarray | torch.Tensor) -> np.ndarray:
     if isinstance(image, torch.Tensor):
-        raise TypeError("image is already a tensor; ToTensor should be the final transform")
+        raise TypeError(
+            "image is already a tensor; ToTensor should be the final transform"
+        )
     return image
 
 
@@ -294,7 +329,12 @@ def _ensure_numpy_array(array: np.ndarray | torch.Tensor) -> np.ndarray:
     return array
 
 
-def _scale_boxes(boxes: np.ndarray, scale_factor: np.ndarray, image_shape: tuple[int, int, int], clip: bool) -> np.ndarray:
+def _scale_boxes(
+    boxes: np.ndarray,
+    scale_factor: np.ndarray,
+    image_shape: tuple[int, int, int],
+    clip: bool,
+) -> np.ndarray:
     boxes = boxes.astype(np.float32, copy=True)
     if boxes.size == 0:
         return boxes.reshape(0, 4)
@@ -314,7 +354,11 @@ def _scale_keypoints(
 ) -> np.ndarray:
     keypoints = keypoints.astype(np.float32, copy=True)
     if keypoints.size == 0:
-        return keypoints.reshape(0, keypoints.shape[1] if keypoints.ndim == 3 else 0, keypoints.shape[-1] if keypoints.ndim else 3)
+        return keypoints.reshape(
+            0,
+            keypoints.shape[1] if keypoints.ndim == 3 else 0,
+            keypoints.shape[-1] if keypoints.ndim else 3,
+        )
     keypoints[..., 0] *= w_scale
     keypoints[..., 1] *= h_scale
     if clip:
@@ -323,7 +367,12 @@ def _scale_keypoints(
 
 
 def _clip_keypoints(keypoints: np.ndarray, width: int, height: int) -> np.ndarray:
-    outside = (keypoints[..., 0] < 0) | (keypoints[..., 0] > width) | (keypoints[..., 1] < 0) | (keypoints[..., 1] > height)
+    outside = (
+        (keypoints[..., 0] < 0)
+        | (keypoints[..., 0] > width)
+        | (keypoints[..., 1] < 0)
+        | (keypoints[..., 1] > height)
+    )
     if keypoints.shape[-1] >= 3:
         keypoints[..., 2] = np.where(outside, 0, keypoints[..., 2])
     keypoints[..., 0] = np.clip(keypoints[..., 0], 0, width)
@@ -341,12 +390,18 @@ def _flip_boxes(boxes: np.ndarray, width: int) -> np.ndarray:
     return flipped
 
 
-def _flip_keypoints(keypoints: np.ndarray, width: int, flip_idx: Sequence[int]) -> np.ndarray:
+def _flip_keypoints(
+    keypoints: np.ndarray, width: int, flip_idx: Sequence[int]
+) -> np.ndarray:
     keypoints = keypoints.astype(np.float32, copy=True)
     if keypoints.size == 0:
-        return keypoints.reshape(0, len(flip_idx), keypoints.shape[-1] if keypoints.ndim else 3)
+        return keypoints.reshape(
+            0, len(flip_idx), keypoints.shape[-1] if keypoints.ndim else 3
+        )
     if len(flip_idx) != keypoints.shape[1]:
-        raise ValueError(f"flip_idx length {len(flip_idx)} does not match keypoints {keypoints.shape[1]}")
+        raise ValueError(
+            f"flip_idx length {len(flip_idx)} does not match keypoints {keypoints.shape[1]}"
+        )
     flipped = keypoints[:, flip_idx, :].copy()
     flipped[..., 0] = width - flipped[..., 0]
     return flipped
@@ -364,7 +419,9 @@ def _centers_in_patch(boxes: np.ndarray, patch: np.ndarray) -> np.ndarray:
     )
 
 
-def _crop_boxes_after_patch(boxes: np.ndarray, patch: np.ndarray, keep: np.ndarray, clip: bool) -> np.ndarray:
+def _crop_boxes_after_patch(
+    boxes: np.ndarray, patch: np.ndarray, keep: np.ndarray, clip: bool
+) -> np.ndarray:
     boxes = boxes.astype(np.float32, copy=True)[keep]
     if boxes.size == 0:
         return boxes.reshape(0, 4)

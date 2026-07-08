@@ -64,4 +64,3 @@ class Conv4layerBlock(nn.Module):
         x = self.conv1(x)
         x = self.conv2(x)
         return x
-

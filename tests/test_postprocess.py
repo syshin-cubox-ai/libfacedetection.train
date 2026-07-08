@@ -37,7 +37,9 @@ def test_batched_nms_keeps_different_labels() -> None:
 
 
 def test_yunet_postprocessor_decodes_and_filters_predictions() -> None:
-    postprocessor = YuNetPostprocessor(strides=(8,), score_threshold=0.5, nms_threshold=0.45)
+    postprocessor = YuNetPostprocessor(
+        strides=(8,), score_threshold=0.5, nms_threshold=0.45
+    )
     cls_scores = [torch.tensor([[[[10.0]]]])]
     bbox_preds = [
         torch.tensor(
@@ -60,4 +62,3 @@ def test_yunet_postprocessor_decodes_and_filters_predictions() -> None:
     assert result.scores.shape == (1,)
     assert result.labels.tolist() == [0]
     assert result.keypoints.shape == (1, 10)
-

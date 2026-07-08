@@ -9,15 +9,25 @@ from pathlib import Path
 
 import torch
 
-from yunet_train.tasks.pose import COCO_PERSON_KEYPOINTS_VAL2017, COCO_VAL_IMAGE_DIR, build_yunet_pose
-from yunet_train.tasks.pose.coco_eval import COCOPoseEvalDataset, collect_coco_keypoint_predictions, evaluate_coco_keypoints
+from yunet_train.tasks.pose import (
+    COCO_PERSON_KEYPOINTS_VAL2017,
+    COCO_VAL_IMAGE_DIR,
+    build_yunet_pose,
+)
+from yunet_train.tasks.pose.coco_eval import (
+    COCOPoseEvalDataset,
+    collect_coco_keypoint_predictions,
+    evaluate_coco_keypoints,
+)
 from yunet_train.engine import load_checkpoint
 
 _LOG = logging.getLogger(__name__)
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Evaluate YuNet pose with official COCO keypoint AP.")
+    parser = argparse.ArgumentParser(
+        description="Evaluate YuNet pose with official COCO keypoint AP."
+    )
     parser.add_argument("checkpoint", type=Path)
     parser.add_argument("--ann-file", type=Path, default=COCO_PERSON_KEYPOINTS_VAL2017)
     parser.add_argument("--image-dir", type=Path, default=COCO_VAL_IMAGE_DIR)
@@ -25,13 +35,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--image-size", type=int, default=640)
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--workers", type=int, default=0)
-    parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument(
+        "--device", default="cuda" if torch.cuda.is_available() else "cpu"
+    )
     parser.add_argument("--limit-samples", type=int, default=None)
     parser.add_argument("--score-threshold", type=float, default=0.25)
     parser.add_argument("--nms-threshold", type=float, default=0.45)
     parser.add_argument("--max-detections", type=int, default=20)
     parser.add_argument("--category-id", type=int, default=1)
-    parser.add_argument("--out-dir", type=Path, default=Path("work_dirs/pose_coco_eval"))
+    parser.add_argument(
+        "--out-dir", type=Path, default=Path("work_dirs/pose_coco_eval")
+    )
     return parser.parse_args()
 
 
@@ -62,7 +76,11 @@ def main() -> None:
     elapsed = time.perf_counter() - started
     metrics = " ".join(f"{key}={value:.6f}" for key, value in result.metrics.items())
     _LOG.info("COCO keypoint AP %s", metrics)
-    _LOG.info("eval_pose_coco finished in %.2f s (predictions=%s)", elapsed, result.num_predictions)
+    _LOG.info(
+        "eval_pose_coco finished in %.2f s (predictions=%s)",
+        elapsed,
+        result.num_predictions,
+    )
 
 
 def eval_pose_coco(args: argparse.Namespace):
@@ -70,7 +88,9 @@ def eval_pose_coco(args: argparse.Namespace):
     if not args.ann_file.is_file():
         raise FileNotFoundError(f"Annotation file not found: {args.ann_file.resolve()}")
     if not args.image_dir.is_dir():
-        raise FileNotFoundError(f"Image directory not found: {args.image_dir.resolve()}")
+        raise FileNotFoundError(
+            f"Image directory not found: {args.image_dir.resolve()}"
+        )
 
     _LOG.info("Loading checkpoint %s", args.checkpoint.resolve())
     checkpoint = torch.load(args.checkpoint, map_location="cpu")
@@ -123,7 +143,9 @@ def eval_pose_coco(args: argparse.Namespace):
 def _configure_logging(out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     log_path = out_dir / "eval_pose_coco.log"
-    fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    fmt = logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+    )
     stream = logging.StreamHandler(sys.stdout)
     stream.setFormatter(fmt)
     file_handler = logging.FileHandler(log_path, encoding="utf-8")

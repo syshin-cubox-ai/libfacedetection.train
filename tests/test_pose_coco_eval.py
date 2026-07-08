@@ -11,7 +11,10 @@ import torch
 
 from yunet_train.cli.eval_pose_coco import eval_pose_coco
 from yunet_train.tasks.pose import PoseSample, build_yunet_pose
-from yunet_train.tasks.pose.coco_eval import _result_to_coco_predictions, evaluate_coco_keypoints
+from yunet_train.tasks.pose.coco_eval import (
+    _result_to_coco_predictions,
+    evaluate_coco_keypoints,
+)
 from yunet_train.tasks.pose.postprocess import PoseDetectionResult
 
 
@@ -57,7 +60,10 @@ def test_evaluate_coco_keypoints_empty_predictions_writes_zero_metrics() -> None
         rmtree(work_dir)
     work_dir.mkdir(parents=True)
     ann_file = work_dir / "person_keypoints_val.json"
-    ann_file.write_text(json.dumps({"images": [], "annotations": [], "categories": []}), encoding="utf-8")
+    ann_file.write_text(
+        json.dumps({"images": [], "annotations": [], "categories": []}),
+        encoding="utf-8",
+    )
 
     result = evaluate_coco_keypoints(
         ann_file=ann_file,
@@ -77,14 +83,25 @@ def test_eval_pose_coco_cli_smoke_with_empty_predictions() -> None:
         rmtree(work_dir)
     image_dir = work_dir / "images"
     image_dir.mkdir(parents=True)
-    cv2.imwrite(str(image_dir / "000000000001.jpg"), np.zeros((32, 32, 3), dtype=np.uint8))
+    cv2.imwrite(
+        str(image_dir / "000000000001.jpg"), np.zeros((32, 32, 3), dtype=np.uint8)
+    )
     ann_file = work_dir / "person_keypoints_val.json"
     ann_file.write_text(
         json.dumps(
             {
-                "images": [{"id": 1, "file_name": "000000000001.jpg", "width": 32, "height": 32}],
+                "images": [
+                    {
+                        "id": 1,
+                        "file_name": "000000000001.jpg",
+                        "width": 32,
+                        "height": 32,
+                    }
+                ],
                 "annotations": [],
-                "categories": [{"id": 1, "name": "person", "keypoints": [], "skeleton": []}],
+                "categories": [
+                    {"id": 1, "name": "person", "keypoints": [], "skeleton": []}
+                ],
             }
         ),
         encoding="utf-8",

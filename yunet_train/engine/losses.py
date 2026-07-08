@@ -67,4 +67,3 @@ def bbox_overlaps(
     area2 = (bboxes2[:, 2] - bboxes2[:, 0]) * (bboxes2[:, 3] - bboxes2[:, 1])
     union = area1[:, None] + area2 - overlap
     return overlap / (union + eps)
-

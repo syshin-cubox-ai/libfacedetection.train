@@ -138,7 +138,11 @@ def collect_coco_keypoint_predictions(
         images = batch.images.to(device, non_blocking=True)
         results = postprocessor(model(images))
         for image_id, sample, result in zip(batch.image_ids, batch.samples, results):
-            predictions.extend(_result_to_coco_predictions(image_id, sample, result, category_id=category_id))
+            predictions.extend(
+                _result_to_coco_predictions(
+                    image_id, sample, result, category_id=category_id
+                )
+            )
         done = batch_idx + 1
         if done == 1 or done == num_batches or done % log_every == 0:
             _LOGGER.info(
@@ -147,7 +151,11 @@ def collect_coco_keypoint_predictions(
                 num_batches,
                 time.perf_counter() - infer_started,
             )
-    _LOGGER.info("Inference done in %.2fs, total detection records=%s", time.perf_counter() - infer_started, len(predictions))
+    _LOGGER.info(
+        "Inference done in %.2fs, total detection records=%s",
+        time.perf_counter() - infer_started,
+        len(predictions),
+    )
     return predictions
 
 
@@ -168,7 +176,11 @@ def evaluate_coco_keypoints(
 ) -> CocoKeypointEvalResult:
     results_path = Path(results_file)
     results_path.parent.mkdir(parents=True, exist_ok=True)
-    _LOGGER.info("Writing COCO detection JSON (%s entries) -> %s", len(predictions), results_path.resolve())
+    _LOGGER.info(
+        "Writing COCO detection JSON (%s entries) -> %s",
+        len(predictions),
+        results_path.resolve(),
+    )
     results_path.write_text(json.dumps(predictions), encoding="utf-8")
     if not predictions:
         _LOGGER.warning(
@@ -279,7 +291,9 @@ def _load_coco_images(ann_file: Path) -> list[dict[str, Any]]:
     data = json.loads(ann_file.read_text(encoding="utf-8"))
     images = data.get("images", [])
     if not isinstance(images, list):
-        raise ValueError(f"Invalid COCO annotation file, images must be a list: {ann_file}")
+        raise ValueError(
+            f"Invalid COCO annotation file, images must be a list: {ann_file}"
+        )
     return sorted(images, key=lambda item: int(item["id"]))
 
 

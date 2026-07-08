@@ -27,7 +27,9 @@ def test_export_tflite_wraps_onnx2tf(monkeypatch) -> None:
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / "model_float32.tflite").write_bytes(b"fake tflite")
 
-    monkeypatch.setattr(export_tflite_cli, "_ensure_onnx2tf_available", lambda command: None)
+    monkeypatch.setattr(
+        export_tflite_cli, "_ensure_onnx2tf_available", lambda command: None
+    )
     monkeypatch.setattr(export_tflite_cli, "export_onnx", fake_export_onnx)
     monkeypatch.setattr(export_tflite_cli.subprocess, "run", fake_run)
 

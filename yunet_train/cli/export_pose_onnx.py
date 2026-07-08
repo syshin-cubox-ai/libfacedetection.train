@@ -10,7 +10,9 @@ from yunet_train.tasks.pose import build_yunet_pose
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Export a YuNet pose checkpoint to ONNX.")
+    parser = argparse.ArgumentParser(
+        description="Export a YuNet pose checkpoint to ONNX."
+    )
     parser.add_argument("checkpoint", type=Path)
     parser.add_argument("--variant", choices=("yunet_n", "yunet_s"), default=None)
     parser.add_argument("--output-file", type=Path, default=None)
@@ -35,10 +37,15 @@ def export_pose_onnx(args: argparse.Namespace) -> Path:
     return export_model_to_onnx(
         checkpoint_path=args.checkpoint,
         build_model=lambda variant: build_yunet_pose(variant, kpt_shape=kpt_shape),
-        output_file=args.output_file or _default_output_file(args.checkpoint, args.variant, input_shape, args.dynamic_export),
+        output_file=args.output_file
+        or _default_output_file(
+            args.checkpoint, args.variant, input_shape, args.dynamic_export
+        ),
         input_shape=input_shape,
         output_names=_output_names(),
-        flatten_outputs=lambda model, image: _flatten_export_outputs(model, image, kpt_shape),
+        flatten_outputs=lambda model, image: _flatten_export_outputs(
+            model, image, kpt_shape
+        ),
         variant=args.variant,
         device=args.device,
         opset_version=args.opset_version,
@@ -55,7 +62,11 @@ def _default_output_file(
 ) -> Path:
     tag = "dynamic" if dynamic_export else f"{input_shape[-2]}_{input_shape[-1]}"
     variant_tag = variant or "auto"
-    return Path("work_dirs") / "export" / f"{checkpoint.stem}_{variant_tag}_pose_{tag}.onnx"
+    return (
+        Path("work_dirs")
+        / "export"
+        / f"{checkpoint.stem}_{variant_tag}_pose_{tag}.onnx"
+    )
 
 
 def _output_names() -> list[str]:
@@ -73,10 +84,19 @@ def _flatten_export_outputs(
     cls_scores, bbox_preds, objectnesses, kpt_preds = model(image)
     batch_size = image.shape[0]
     kpt_channels = kpt_shape[0] * kpt_shape[1]
-    cls = [pred.permute(0, 2, 3, 1).reshape(batch_size, -1, 1).sigmoid() for pred in cls_scores]
-    obj = [pred.permute(0, 2, 3, 1).reshape(batch_size, -1, 1).sigmoid() for pred in objectnesses]
+    cls = [
+        pred.permute(0, 2, 3, 1).reshape(batch_size, -1, 1).sigmoid()
+        for pred in cls_scores
+    ]
+    obj = [
+        pred.permute(0, 2, 3, 1).reshape(batch_size, -1, 1).sigmoid()
+        for pred in objectnesses
+    ]
     bbox = [pred.permute(0, 2, 3, 1).reshape(batch_size, -1, 4) for pred in bbox_preds]
-    kpt = [pred.permute(0, 2, 3, 1).reshape(batch_size, -1, kpt_channels) for pred in kpt_preds]
+    kpt = [
+        pred.permute(0, 2, 3, 1).reshape(batch_size, -1, kpt_channels)
+        for pred in kpt_preds
+    ]
     return cls + obj + bbox + kpt
 
 

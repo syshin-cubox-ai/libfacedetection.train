@@ -80,4 +80,6 @@ def get_model_config(variant: str) -> YuNetModelConfig:
         return MODEL_CONFIGS[variant]
     except KeyError as exc:
         names = ", ".join(sorted(MODEL_CONFIGS))
-        raise ValueError(f"Unknown YuNet variant {variant!r}. Expected one of: {names}") from exc
+        raise ValueError(
+            f"Unknown YuNet variant {variant!r}. Expected one of: {names}"
+        ) from exc

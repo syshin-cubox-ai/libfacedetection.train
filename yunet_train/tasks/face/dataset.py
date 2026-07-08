@@ -58,4 +58,3 @@ class WIDERFaceDataset(Dataset):
             image_shape=image.shape,
             pad_shape=image.shape,
         )
-

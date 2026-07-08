@@ -60,7 +60,9 @@ class YuNetHead(nn.Module):
                 for i in range(self.shared_stack_convs):
                     chn = self.in_channels if i == 0 else self.feat_channels
                     single_level_share_convs.append(ConvDPUnit(chn, self.feat_channels))
-                self.multi_level_share_convs.append(nn.Sequential(*single_level_share_convs))
+                self.multi_level_share_convs.append(
+                    nn.Sequential(*single_level_share_convs)
+                )
 
             if self.stacked_convs > 0:
                 single_level_cls_convs = []
@@ -73,8 +75,12 @@ class YuNetHead(nn.Module):
                     )
                     single_level_cls_convs.append(ConvDPUnit(chn, self.feat_channels))
                     single_level_reg_convs.append(ConvDPUnit(chn, self.feat_channels))
-                self.multi_level_reg_convs.append(nn.Sequential(*single_level_reg_convs))
-                self.multi_level_cls_convs.append(nn.Sequential(*single_level_cls_convs))
+                self.multi_level_reg_convs.append(
+                    nn.Sequential(*single_level_reg_convs)
+                )
+                self.multi_level_cls_convs.append(
+                    nn.Sequential(*single_level_cls_convs)
+                )
 
             chn = (
                 self.in_channels
@@ -100,8 +106,7 @@ class YuNetHead(nn.Module):
     ) -> tuple[list[torch.Tensor], ...]:
         if self.shared_stack_convs > 0:
             feats = [
-                convs(feat)
-                for feat, convs in zip(feats, self.multi_level_share_convs)
+                convs(feat) for feat, convs in zip(feats, self.multi_level_share_convs)
             ]
 
         if self.stacked_convs > 0:
@@ -122,9 +127,11 @@ class YuNetHead(nn.Module):
         obj_preds = [
             convs(feat) for feat, convs in zip(feats_reg, self.multi_level_obj)
         ]
-        kps_preds = [
-            convs(feat) for feat, convs in zip(feats_reg, self.multi_level_kps)
-        ] if self.use_kps else []
+        kps_preds = (
+            [convs(feat) for feat, convs in zip(feats_reg, self.multi_level_kps)]
+            if self.use_kps
+            else []
+        )
 
         if torch.onnx.is_in_onnx_export():
             cls = [
@@ -135,10 +142,7 @@ class YuNetHead(nn.Module):
                 f.permute(0, 2, 3, 1).view(f.shape[0], -1, 1).sigmoid()
                 for f in obj_preds
             ]
-            bbox = [
-                f.permute(0, 2, 3, 1).view(f.shape[0], -1, 4)
-                for f in bbox_preds
-            ]
+            bbox = [f.permute(0, 2, 3, 1).view(f.shape[0], -1, 4) for f in bbox_preds]
             kps = [
                 f.permute(0, 2, 3, 1).view(f.shape[0], -1, self.NK * 2)
                 for f in kps_preds

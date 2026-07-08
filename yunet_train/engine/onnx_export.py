@@ -22,7 +22,8 @@ def export_model_to_onnx(
     opset_version: int,
     dynamic_export: bool,
     verify: bool,
-    clean_state_dict: Callable[[dict[str, torch.Tensor]], dict[str, torch.Tensor]] | None = None,
+    clean_state_dict: Callable[[dict[str, torch.Tensor]], dict[str, torch.Tensor]]
+    | None = None,
 ) -> Path:
     checkpoint = torch.load(checkpoint_path, map_location="cpu")
     resolved_variant = variant or checkpoint.get("config", {}).get("variant", "yunet_n")
@@ -92,11 +93,20 @@ def verify_onnx(
     import onnxruntime
 
     with torch.no_grad():
-        torch_outputs = [output.detach().cpu().numpy() for output in flatten_outputs(model, example_input)]
-    session = onnxruntime.InferenceSession(str(output_file), providers=["CPUExecutionProvider"])
-    onnx_outputs = session.run(None, {session.get_inputs()[0].name: example_input.detach().cpu().numpy()})
+        torch_outputs = [
+            output.detach().cpu().numpy()
+            for output in flatten_outputs(model, example_input)
+        ]
+    session = onnxruntime.InferenceSession(
+        str(output_file), providers=["CPUExecutionProvider"]
+    )
+    onnx_outputs = session.run(
+        None, {session.get_inputs()[0].name: example_input.detach().cpu().numpy()}
+    )
     if len(torch_outputs) != len(onnx_outputs):
-        raise AssertionError(f"ONNX output count mismatch: torch={len(torch_outputs)} onnx={len(onnx_outputs)}")
+        raise AssertionError(
+            f"ONNX output count mismatch: torch={len(torch_outputs)} onnx={len(onnx_outputs)}"
+        )
     for idx, (torch_output, onnx_output) in enumerate(zip(torch_outputs, onnx_outputs)):
         np.testing.assert_allclose(
             onnx_output,

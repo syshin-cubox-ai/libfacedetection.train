@@ -13,7 +13,9 @@ from yunet_train.tasks.face import FaceSample, ToTensor
 
 
 class SyntheticDataset:
-    def __init__(self, *args: object, transform: object | None = None, **kwargs: object):
+    def __init__(
+        self, *args: object, transform: object | None = None, **kwargs: object
+    ):
         self.transform = transform
         self.records = [object()]
 
@@ -124,7 +126,9 @@ def test_train_cli_smoke_saves_checkpoint(monkeypatch: pytest.MonkeyPatch) -> No
     rmtree(work_dir)
 
 
-def test_train_cli_resume_from_latest_checkpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_train_cli_resume_from_latest_checkpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(train_cli, "WIDERFaceDataset", SyntheticDataset)
     monkeypatch.setattr(train_cli, "build_train_transforms", lambda **kwargs: None)
     monkeypatch.setattr(train_cli, "build_eval_transforms", lambda **kwargs: None)

@@ -64,7 +64,9 @@ class CocoJsonPoseDataset(Dataset):
             anns = per_anns[img_id]
             if not anns:
                 continue
-            records.append(_CocoImageRecord(image_info=images[img_id], annotations=anns))
+            records.append(
+                _CocoImageRecord(image_info=images[img_id], annotations=anns)
+            )
         return records
 
     def __len__(self) -> int:
@@ -86,10 +88,17 @@ class CocoJsonPoseDataset(Dataset):
 
         for ann in rec.annotations:
             bbox = ann["bbox"]
-            x, y, bw, bh = float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])
+            x, y, bw, bh = (
+                float(bbox[0]),
+                float(bbox[1]),
+                float(bbox[2]),
+                float(bbox[3]),
+            )
             x1, y1, x2, y2 = x, y, x + bw, y + bh
 
-            raw = np.array(ann["keypoints"], dtype=np.float32).reshape(self.kpt_shape[0], self.kpt_shape[1])
+            raw = np.array(ann["keypoints"], dtype=np.float32).reshape(
+                self.kpt_shape[0], self.kpt_shape[1]
+            )
             kpt = raw.copy()
 
             labels.append(0)
@@ -98,7 +107,9 @@ class CocoJsonPoseDataset(Dataset):
 
         labels_array = np.array(labels, dtype=np.int64)
         boxes_array = np.array(boxes, dtype=np.float32).reshape(-1, 4)
-        keypoints_array = np.array(keypoints, dtype=np.float32).reshape(-1, *self.kpt_shape)
+        keypoints_array = np.array(keypoints, dtype=np.float32).reshape(
+            -1, *self.kpt_shape
+        )
         boxes_array = _clip_boxes(boxes_array, width, height)
         keypoints_array = _clip_keypoints(keypoints_array, width, height)
 

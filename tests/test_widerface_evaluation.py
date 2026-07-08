@@ -5,7 +5,13 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from yunet_train.tasks.face.evaluation import detections_to_widerface, image_eval, norm_score, voc_ap, write_widerface_predictions
+from yunet_train.tasks.face.evaluation import (
+    detections_to_widerface,
+    image_eval,
+    norm_score,
+    voc_ap,
+    write_widerface_predictions,
+)
 import yunet_train.tasks.face.evaluation as widerface_eval
 from yunet_train.tasks.face import DetectionResult
 
@@ -73,12 +79,16 @@ def test_widerface_image_eval_counts_single_match() -> None:
 
 
 def test_widerface_setting_eval_keeps_fractional_coordinates(monkeypatch) -> None:
-    predictions = {"event": {"image": np.array([[0.6, 0.6, 9.0, 9.0, 1.0]], dtype=np.float32)}}
+    predictions = {
+        "event": {"image": np.array([[0.6, 0.6, 9.0, 9.0, 1.0]], dtype=np.float32)}
+    }
     facebox_list = np.empty((1, 1), dtype=object)
     event_list = np.empty((1, 1), dtype=object)
     file_list = np.empty((1, 1), dtype=object)
     gt_list = np.empty((1, 1), dtype=object)
-    facebox_list[0, 0] = np.array([[np.array([[0.6, 0.6, 9.0, 9.0]], dtype=np.float32)]], dtype=object)
+    facebox_list[0, 0] = np.array(
+        [[np.array([[0.6, 0.6, 9.0, 9.0]], dtype=np.float32)]], dtype=object
+    )
     event_list[0, 0] = np.array(["event"], dtype=object)
     file_list[0, 0] = np.array([[np.array(["image"], dtype=object)]], dtype=object)
     gt_list[0, 0] = np.array([[np.array([1], dtype=np.int64)]], dtype=object)
@@ -88,13 +98,19 @@ def test_widerface_setting_eval_keeps_fractional_coordinates(monkeypatch) -> Non
 
     monkeypatch.setattr(widerface_eval.np, "round", fail_if_called)
 
-    ap = widerface_eval._evaluate_setting(predictions, facebox_list, event_list, file_list, gt_list, 0.5, thresh_num=10)
+    ap = widerface_eval._evaluate_setting(
+        predictions, facebox_list, event_list, file_list, gt_list, 0.5, thresh_num=10
+    )
 
     assert ap == 1.0
 
 
 def test_norm_score_and_voc_ap() -> None:
-    predictions = {"event": {"image": np.array([[0, 0, 1, 1, 0.2], [0, 0, 1, 1, 0.6]], dtype=np.float32)}}
+    predictions = {
+        "event": {
+            "image": np.array([[0, 0, 1, 1, 0.2], [0, 0, 1, 1, 0.6]], dtype=np.float32)
+        }
+    }
 
     normalized = norm_score(predictions)
 
@@ -104,7 +120,9 @@ def test_norm_score_and_voc_ap() -> None:
 
 def test_write_widerface_predictions() -> None:
     output_dir = Path(__file__).resolve().parent / "output" / "widerface_predictions"
-    predictions = {"0--Parade": {"sample": np.array([[1, 2, 3, 4, 0.5]], dtype=np.float32)}}
+    predictions = {
+        "0--Parade": {"sample": np.array([[1, 2, 3, 4, 0.5]], dtype=np.float32)}
+    }
 
     write_widerface_predictions(predictions, output_dir)
 

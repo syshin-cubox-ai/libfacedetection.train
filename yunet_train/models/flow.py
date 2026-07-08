@@ -18,7 +18,12 @@ class RealNVP(nn.Module):
     @staticmethod
     def nets() -> nn.Sequential:
         return nn.Sequential(
-            nn.Linear(2, 64), nn.SiLU(), nn.Linear(64, 64), nn.SiLU(), nn.Linear(64, 2), nn.Tanh()
+            nn.Linear(2, 64),
+            nn.SiLU(),
+            nn.Linear(64, 64),
+            nn.SiLU(),
+            nn.Linear(64, 2),
+            nn.Tanh(),
         )
 
     @staticmethod
@@ -35,7 +40,9 @@ class RealNVP(nn.Module):
         super().__init__()
         self.register_buffer("loc", torch.zeros(2))
         self.register_buffer("cov", torch.eye(2))
-        self.register_buffer("mask", torch.tensor([[0, 1], [1, 0]] * 3, dtype=torch.float32))
+        self.register_buffer(
+            "mask", torch.tensor([[0, 1], [1, 0]] * 3, dtype=torch.float32)
+        )
 
         self.s = nn.ModuleList([self.nets() for _ in range(len(self.mask))])
         self.t = nn.ModuleList([self.nett() for _ in range(len(self.mask))])

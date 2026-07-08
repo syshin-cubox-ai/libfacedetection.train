@@ -16,7 +16,9 @@ def _parse_annotation_line(
 ) -> FaceAnnotation:
     values = [float(value) for value in line.strip().split()]
     if len(values) < 4:
-        raise ValueError(f"Expected at least 4 bbox values, got {len(values)}: {line!r}")
+        raise ValueError(
+            f"Expected at least 4 bbox values, got {len(values)}: {line!r}"
+        )
 
     bbox = np.array(values[0:4], dtype=np.float32)
     keypoints = np.zeros((keypoint_count, 3), dtype=np.float32)
@@ -106,4 +108,3 @@ def parse_labelv2_file(
 
     flush_current()
     return records
-

@@ -8,13 +8,11 @@ from torch.utils.data import DataLoader
 
 
 class LRScheduler(Protocol):
-    def step(self, *, epoch: int) -> list[float]:
-        ...
+    def step(self, *, epoch: int) -> list[float]: ...
 
 
 class WeightAverager(Protocol):
-    def update(self, model: torch.nn.Module) -> None:
-        ...
+    def update(self, model: torch.nn.Module) -> None: ...
 
 
 def train_loss_epoch(
@@ -54,7 +52,12 @@ def train_loss_epoch(
 
         steps += 1
         _accumulate(totals, losses, loss, loss_names)
-        if log_interval > 0 and logger is not None and format_log is not None and (steps == 1 or steps % log_interval == 0):
+        if (
+            log_interval > 0
+            and logger is not None
+            and format_log is not None
+            and (steps == 1 or steps % log_interval == 0)
+        ):
             logger(format_log(epoch, steps, len(data_loader), totals))
 
     if steps == 0:

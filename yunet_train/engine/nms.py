@@ -23,7 +23,9 @@ def batched_nms(
     return keep[order]
 
 
-def nms(boxes: torch.Tensor, scores: torch.Tensor, iou_threshold: float) -> torch.Tensor:
+def nms(
+    boxes: torch.Tensor, scores: torch.Tensor, iou_threshold: float
+) -> torch.Tensor:
     if boxes.numel() == 0:
         return torch.empty((0,), dtype=torch.long, device=boxes.device)
 

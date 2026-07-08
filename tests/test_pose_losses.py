@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import torch
 
-from yunet_train.tasks.pose import YuNetPoseCriterion, keypoint_visibility_loss, oks_keypoint_loss
+from yunet_train.tasks.pose import (
+    YuNetPoseCriterion,
+    keypoint_visibility_loss,
+    oks_keypoint_loss,
+)
 
 
 def test_oks_keypoint_loss_is_zero_for_perfect_visible_points() -> None:
@@ -33,7 +37,9 @@ def test_keypoint_visibility_loss_trains_visible_and_invisible_targets() -> None
     good_logits = torch.tensor([[8.0, -8.0]])
     bad_logits = torch.tensor([[-8.0, 8.0]])
 
-    assert keypoint_visibility_loss(good_logits, target) < keypoint_visibility_loss(bad_logits, target)
+    assert keypoint_visibility_loss(good_logits, target) < keypoint_visibility_loss(
+        bad_logits, target
+    )
 
 
 def test_pose_criterion_runs_forward_and_backward_on_synthetic_batch() -> None:
@@ -58,7 +64,13 @@ def test_pose_criterion_runs_forward_and_backward_on_synthetic_batch() -> None:
     total_loss = sum(losses.values())
     total_loss.backward()
 
-    assert set(losses) == {"loss_cls", "loss_bbox", "loss_obj", "loss_kpt", "loss_kpt_vis"}
+    assert set(losses) == {
+        "loss_cls",
+        "loss_bbox",
+        "loss_obj",
+        "loss_kpt",
+        "loss_kpt_vis",
+    }
     assert torch.isfinite(total_loss)
     assert cls_scores[0].grad is not None
     assert bbox_preds[0].grad is not None

@@ -52,19 +52,33 @@ class YuNetPoseHead(nn.Module):
                 for i in range(self.shared_stack_convs):
                     chn = self.in_channels if i == 0 else self.feat_channels
                     single_level_share_convs.append(ConvDPUnit(chn, self.feat_channels))
-                self.multi_level_share_convs.append(nn.Sequential(*single_level_share_convs))
+                self.multi_level_share_convs.append(
+                    nn.Sequential(*single_level_share_convs)
+                )
 
             if self.stacked_convs > 0:
                 single_level_cls_convs = []
                 single_level_reg_convs = []
                 for i in range(self.stacked_convs):
-                    chn = self.in_channels if i == 0 and self.shared_stack_convs == 0 else self.feat_channels
+                    chn = (
+                        self.in_channels
+                        if i == 0 and self.shared_stack_convs == 0
+                        else self.feat_channels
+                    )
                     single_level_cls_convs.append(ConvDPUnit(chn, self.feat_channels))
                     single_level_reg_convs.append(ConvDPUnit(chn, self.feat_channels))
-                self.multi_level_cls_convs.append(nn.Sequential(*single_level_cls_convs))
-                self.multi_level_reg_convs.append(nn.Sequential(*single_level_reg_convs))
+                self.multi_level_cls_convs.append(
+                    nn.Sequential(*single_level_cls_convs)
+                )
+                self.multi_level_reg_convs.append(
+                    nn.Sequential(*single_level_reg_convs)
+                )
 
-            chn = self.in_channels if self.stacked_convs == 0 and self.shared_stack_convs == 0 else self.feat_channels
+            chn = (
+                self.in_channels
+                if self.stacked_convs == 0 and self.shared_stack_convs == 0
+                else self.feat_channels
+            )
             kpt_channels = max(chn // 4, self.kpt_out_channels)
             self.multi_level_cls.append(ConvDPUnit(chn, self.num_classes, False))
             self.multi_level_bbox.append(ConvDPUnit(chn, 4, False))
@@ -83,32 +97,60 @@ class YuNetPoseHead(nn.Module):
     def forward(
         self,
         feats: list[torch.Tensor],
-    ) -> tuple[list[torch.Tensor], list[torch.Tensor], list[torch.Tensor], list[torch.Tensor]]:
+    ) -> tuple[
+        list[torch.Tensor], list[torch.Tensor], list[torch.Tensor], list[torch.Tensor]
+    ]:
         if self.shared_stack_convs > 0:
-            feats = [convs(feat) for feat, convs in zip(feats, self.multi_level_share_convs)]
+            feats = [
+                convs(feat) for feat, convs in zip(feats, self.multi_level_share_convs)
+            ]
 
         if self.stacked_convs > 0:
             feats_cls, feats_reg = [], []
             for i in range(self.strides_num):
                 feats_cls.append(self.multi_level_cls_convs[i](feats[i]))
                 feats_reg.append(self.multi_level_reg_convs[i](feats[i]))
-            cls_preds = [convs(feat) for feat, convs in zip(feats_cls, self.multi_level_cls)]
-            bbox_preds = [convs(feat) for feat, convs in zip(feats_reg, self.multi_level_bbox)]
-            obj_preds = [convs(feat) for feat, convs in zip(feats_reg, self.multi_level_obj)]
-            kpt_preds = [convs(feat) for feat, convs in zip(feats_reg, self.multi_level_kpts)]
+            cls_preds = [
+                convs(feat) for feat, convs in zip(feats_cls, self.multi_level_cls)
+            ]
+            bbox_preds = [
+                convs(feat) for feat, convs in zip(feats_reg, self.multi_level_bbox)
+            ]
+            obj_preds = [
+                convs(feat) for feat, convs in zip(feats_reg, self.multi_level_obj)
+            ]
+            kpt_preds = [
+                convs(feat) for feat, convs in zip(feats_reg, self.multi_level_kpts)
+            ]
         else:
-            cls_preds = [convs(feat) for feat, convs in zip(feats, self.multi_level_cls)]
-            bbox_preds = [convs(feat) for feat, convs in zip(feats, self.multi_level_bbox)]
-            obj_preds = [convs(feat) for feat, convs in zip(feats, self.multi_level_obj)]
-            kpt_preds = [convs(feat) for feat, convs in zip(feats, self.multi_level_kpts)]
+            cls_preds = [
+                convs(feat) for feat, convs in zip(feats, self.multi_level_cls)
+            ]
+            bbox_preds = [
+                convs(feat) for feat, convs in zip(feats, self.multi_level_bbox)
+            ]
+            obj_preds = [
+                convs(feat) for feat, convs in zip(feats, self.multi_level_obj)
+            ]
+            kpt_preds = [
+                convs(feat) for feat, convs in zip(feats, self.multi_level_kpts)
+            ]
 
         if torch.onnx.is_in_onnx_export():
             cls = [
-                feat.permute(0, 2, 3, 1).view(feat.shape[0], -1, self.num_classes).sigmoid()
+                feat.permute(0, 2, 3, 1)
+                .view(feat.shape[0], -1, self.num_classes)
+                .sigmoid()
                 for feat in cls_preds
             ]
-            obj = [feat.permute(0, 2, 3, 1).view(feat.shape[0], -1, 1).sigmoid() for feat in obj_preds]
-            bbox = [feat.permute(0, 2, 3, 1).view(feat.shape[0], -1, 4) for feat in bbox_preds]
+            obj = [
+                feat.permute(0, 2, 3, 1).view(feat.shape[0], -1, 1).sigmoid()
+                for feat in obj_preds
+            ]
+            bbox = [
+                feat.permute(0, 2, 3, 1).view(feat.shape[0], -1, 4)
+                for feat in bbox_preds
+            ]
             kpts = [
                 feat.permute(0, 2, 3, 1).view(feat.shape[0], -1, self.kpt_out_channels)
                 for feat in kpt_preds
@@ -156,7 +198,9 @@ class YuNetPose(nn.Module):
     def forward(
         self,
         img: torch.Tensor,
-    ) -> tuple[list[torch.Tensor], list[torch.Tensor], list[torch.Tensor], list[torch.Tensor]]:
+    ) -> tuple[
+        list[torch.Tensor], list[torch.Tensor], list[torch.Tensor], list[torch.Tensor]
+    ]:
         feats = self.extract_feat(img)
         return self.pose_head(feats)
 
@@ -167,4 +211,6 @@ def build_yunet_pose(
     num_classes: int = 1,
     kpt_shape: tuple[int, int] = (17, 3),
 ) -> YuNetPose:
-    return YuNetPose(get_model_config(variant), num_classes=num_classes, kpt_shape=kpt_shape)
+    return YuNetPose(
+        get_model_config(variant), num_classes=num_classes, kpt_shape=kpt_shape
+    )

@@ -38,9 +38,17 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train YuNet pose detector.")
     parser.add_argument("--data-root", type=Path, default=COCO8_POSE_ROOT)
     parser.add_argument("--data-format", choices=("yolo", "coco_json"), default="yolo")
-    parser.add_argument("--coco-train-ann", type=Path, default=None, help="COCO keypoints JSON for training split.")
     parser.add_argument(
-        "--coco-train-images", type=Path, default=None, help="Directory of training images (e.g. .../train2017)."
+        "--coco-train-ann",
+        type=Path,
+        default=None,
+        help="COCO keypoints JSON for training split.",
+    )
+    parser.add_argument(
+        "--coco-train-images",
+        type=Path,
+        default=None,
+        help="Directory of training images (e.g. .../train2017).",
     )
     parser.add_argument("--coco-val-ann", type=Path, default=None)
     parser.add_argument("--coco-val-images", type=Path, default=None)
@@ -58,7 +66,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--warmup-ratio", type=float, default=0.001)
     parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--weight-decay", type=float, default=5e-4)
-    parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument(
+        "--device", default="cuda" if torch.cuda.is_available() else "cpu"
+    )
     parser.add_argument("--checkpoint-interval", type=int, default=8)
     parser.add_argument("--eval-interval", type=int, default=8)
     parser.add_argument("--resume", type=Path, default=None)
@@ -134,11 +144,20 @@ def run_training(args: argparse.Namespace) -> None:
 
         train_loader = _build_loader(args, split="train", shuffle=True, device=device)
         val_loader = _build_val_loader(args, device=device)
-        logger(f"train_loader steps={len(train_loader)} batch_size={args.batch_size} workers={args.workers}")
+        logger(
+            f"train_loader steps={len(train_loader)} batch_size={args.batch_size} workers={args.workers}"
+        )
         if val_loader is not None:
-            logger(f"val_loader steps={len(val_loader)} eval_interval={args.eval_interval}")
-        elif args.eval_interval > 0 and getattr(args, "data_format", "yolo") == "coco_json":
-            logger("coco_json: eval_interval>0 but no val annotations; validation disabled")
+            logger(
+                f"val_loader steps={len(val_loader)} eval_interval={args.eval_interval}"
+            )
+        elif (
+            args.eval_interval > 0
+            and getattr(args, "data_format", "yolo") == "coco_json"
+        ):
+            logger(
+                "coco_json: eval_interval>0 but no val annotations; validation disabled"
+            )
 
         started_at = time.perf_counter()
         for epoch in range(start_epoch, args.epochs + 1):
@@ -162,7 +181,9 @@ def run_training(args: argparse.Namespace) -> None:
                 f"kpt={stats.loss_kpt:.6f} kpt_vis={stats.loss_kpt_vis:.6f} "
                 f"epoch_seconds={epoch_seconds:.3f}"
             )
-            _try_append_metrics_csv(args.work_dir / "metrics.csv", epoch, stats, lr=lr, logger=logger)
+            _try_append_metrics_csv(
+                args.work_dir / "metrics.csv", epoch, stats, lr=lr, logger=logger
+            )
             _try_save_pose_checkpoint(
                 path=args.work_dir / "latest.pth",
                 model=model,
@@ -193,13 +214,24 @@ def run_training(args: argparse.Namespace) -> None:
 
             if val_loader is not None and epoch % args.eval_interval == 0:
                 try:
-                    val_stats = evaluate_pose_loss(model=model, criterion=criterion, data_loader=val_loader, device=device)
+                    val_stats = evaluate_pose_loss(
+                        model=model,
+                        criterion=criterion,
+                        data_loader=val_loader,
+                        device=device,
+                    )
                     logger(
                         f"eval epoch={epoch} loss={val_stats.loss:.6f} cls={val_stats.loss_cls:.6f} "
                         f"bbox={val_stats.loss_bbox:.6f} obj={val_stats.loss_obj:.6f} "
                         f"kpt={val_stats.loss_kpt:.6f} kpt_vis={val_stats.loss_kpt_vis:.6f}"
                     )
-                    _try_append_metrics_csv(args.work_dir / "val_metrics.csv", epoch, val_stats, lr=lr, logger=logger)
+                    _try_append_metrics_csv(
+                        args.work_dir / "val_metrics.csv",
+                        epoch,
+                        val_stats,
+                        lr=lr,
+                        logger=logger,
+                    )
                     _try_save_pose_checkpoint(
                         path=args.work_dir / f"eval_epoch_{epoch}.pth",
                         model=model,
@@ -225,7 +257,9 @@ def run_training(args: argparse.Namespace) -> None:
                         logger=logger,
                     )
                 except Exception as exc:
-                    logger(f"eval_failed epoch={epoch} error={type(exc).__name__}: {exc}")
+                    logger(
+                        f"eval_failed epoch={epoch} error={type(exc).__name__}: {exc}"
+                    )
             elif val_loader is None:
                 best_loss = _maybe_save_best_checkpoint(
                     work_dir=args.work_dir,
@@ -244,10 +278,15 @@ def run_training(args: argparse.Namespace) -> None:
         logger.close()
 
 
-def _build_val_loader(args: argparse.Namespace, *, device: torch.device) -> DataLoader | None:
+def _build_val_loader(
+    args: argparse.Namespace, *, device: torch.device
+) -> DataLoader | None:
     if args.eval_interval <= 0:
         return None
-    if getattr(args, "data_format", "yolo") == "coco_json" and args.coco_val_ann is None:
+    if (
+        getattr(args, "data_format", "yolo") == "coco_json"
+        and args.coco_val_ann is None
+    ):
         return None
     return _build_loader(args, split="val", shuffle=False, device=device)
 
@@ -257,10 +296,14 @@ def _validate_pose_train_args(args: argparse.Namespace) -> None:
         raise ValueError("--resume-weights-only requires --resume")
     if getattr(args, "data_format", "yolo") == "coco_json":
         if args.coco_train_ann is None or args.coco_train_images is None:
-            raise ValueError("data-format=coco_json requires --coco-train-ann and --coco-train-images")
+            raise ValueError(
+                "data-format=coco_json requires --coco-train-ann and --coco-train-images"
+            )
         ca, ci = args.coco_val_ann, args.coco_val_images
         if (ca is None) != (ci is None):
-            raise ValueError("Provide both --coco-val-ann and --coco-val-images, or neither")
+            raise ValueError(
+                "Provide both --coco-val-ann and --coco-val-images, or neither"
+            )
 
 
 def _build_pose_dataset(
@@ -293,7 +336,9 @@ def _build_pose_dataset(
     )
 
 
-def _build_loader(args: argparse.Namespace, *, split: str, shuffle: bool, device: torch.device) -> DataLoader:
+def _build_loader(
+    args: argparse.Namespace, *, split: str, shuffle: bool, device: torch.device
+) -> DataLoader:
     transform = (
         build_pose_train_transforms(
             args.image_size,
@@ -350,7 +395,9 @@ def _save_pose_checkpoint(
         "lr": lr,
     }
     if extra_metrics is not None:
-        metrics.update({key: value for key, value in extra_metrics.items() if value is not None})
+        metrics.update(
+            {key: value for key, value in extra_metrics.items() if value is not None}
+        )
     save_checkpoint(
         path=path,
         model=model,
@@ -376,7 +423,17 @@ def _try_save_pose_checkpoint(
     logger: "RunLogger",
 ) -> bool:
     try:
-        _save_pose_checkpoint(path, model, optimizer, lr_scheduler, epoch, args, stats, lr, extra_metrics=extra_metrics)
+        _save_pose_checkpoint(
+            path,
+            model,
+            optimizer,
+            lr_scheduler,
+            epoch,
+            args,
+            stats,
+            lr,
+            extra_metrics=extra_metrics,
+        )
     except Exception as exc:
         logger(f"checkpoint_save_failed path={path} error={type(exc).__name__}: {exc}")
         return False
@@ -416,7 +473,9 @@ def _maybe_save_best_checkpoint(
         )
         _write_best_loss(work_dir, best_loss=candidate_loss, epoch=epoch)
     except Exception as exc:
-        logger(f"best_checkpoint_save_failed path={best_path} error={type(exc).__name__}: {exc}")
+        logger(
+            f"best_checkpoint_save_failed path={best_path} error={type(exc).__name__}: {exc}"
+        )
         return best_loss
     logger(f"saved_best_checkpoint path={best_path} best_loss={candidate_loss:.6f}")
     return candidate_loss
@@ -427,7 +486,17 @@ def _append_metrics_csv(path: Path, epoch: int, stats: Any, *, lr: float) -> Non
     with path.open("a", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(
             file,
-            fieldnames=("epoch", "lr", "loss", "loss_cls", "loss_bbox", "loss_obj", "loss_kpt", "loss_kpt_vis", "steps"),
+            fieldnames=(
+                "epoch",
+                "lr",
+                "loss",
+                "loss_cls",
+                "loss_bbox",
+                "loss_obj",
+                "loss_kpt",
+                "loss_kpt_vis",
+                "steps",
+            ),
         )
         if not exists:
             writer.writeheader()
@@ -446,7 +515,9 @@ def _append_metrics_csv(path: Path, epoch: int, stats: Any, *, lr: float) -> Non
         )
 
 
-def _try_append_metrics_csv(path: Path, epoch: int, stats: Any, *, lr: float, logger: "RunLogger") -> bool:
+def _try_append_metrics_csv(
+    path: Path, epoch: int, stats: Any, *, lr: float, logger: "RunLogger"
+) -> bool:
     try:
         _append_metrics_csv(path, epoch, stats, lr=lr)
     except Exception as exc:
@@ -456,7 +527,10 @@ def _try_append_metrics_csv(path: Path, epoch: int, stats: Any, *, lr: float, lo
 
 
 def _serializable_config(args: argparse.Namespace) -> dict[str, object]:
-    return {key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()}
+    return {
+        key: str(value) if isinstance(value, Path) else value
+        for key, value in vars(args).items()
+    }
 
 
 def _read_best_loss(work_dir: Path) -> float | None:
@@ -471,17 +545,23 @@ def _read_best_loss(work_dir: Path) -> float | None:
 
 
 def _write_best_loss(work_dir: Path, *, best_loss: float, epoch: int) -> None:
-    (work_dir / "best_loss.txt").write_text(f"{best_loss:.12g},{epoch}\n", encoding="utf-8")
+    (work_dir / "best_loss.txt").write_text(
+        f"{best_loss:.12g},{epoch}\n", encoding="utf-8"
+    )
 
 
-def _checkpoint_best_loss(checkpoint: dict[str, Any], *, fallback: float | None) -> float | None:
+def _checkpoint_best_loss(
+    checkpoint: dict[str, Any], *, fallback: float | None
+) -> float | None:
     metrics = checkpoint.get("metrics", {})
     if isinstance(metrics, dict) and "best_loss" in metrics:
         return float(metrics["best_loss"])
     return fallback
 
 
-def _move_optimizer_state_to_device(optimizer: torch.optim.Optimizer, device: torch.device) -> None:
+def _move_optimizer_state_to_device(
+    optimizer: torch.optim.Optimizer, device: torch.device
+) -> None:
     for state in optimizer.state.values():
         for key, value in state.items():
             if isinstance(value, torch.Tensor):
@@ -491,7 +571,9 @@ def _move_optimizer_state_to_device(optimizer: torch.optim.Optimizer, device: to
 def _log_header(logger: "RunLogger", args: argparse.Namespace) -> None:
     logger("=" * 80)
     logger(f"run_started_at={datetime.now():%Y-%m-%d %H:%M:%S}")
-    logger(f"torch={torch.__version__} cuda_available={torch.cuda.is_available()} cuda={torch.version.cuda}")
+    logger(
+        f"torch={torch.__version__} cuda_available={torch.cuda.is_available()} cuda={torch.version.cuda}"
+    )
     for key, value in sorted(vars(args).items()):
         logger(f"arg.{key}={value}")
 
@@ -509,7 +591,10 @@ class RunLogger:
             self._file.write(line + "\n")
             self._file.flush()
         except OSError as exc:
-            print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] log_write_failed error={type(exc).__name__}: {exc}", flush=True)
+            print(
+                f"[{datetime.now():%Y-%m-%d %H:%M:%S}] log_write_failed error={type(exc).__name__}: {exc}",
+                flush=True,
+            )
 
     def close(self) -> None:
         try:

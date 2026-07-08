@@ -15,10 +15,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("checkpoint", type=Path)
     parser.add_argument("--variant", choices=("yunet_n", "yunet_s"), default=None)
-    parser.add_argument("--output-file", type=Path, default=Path("work_dirs/export/yunet.tflite"))
+    parser.add_argument(
+        "--output-file", type=Path, default=Path("work_dirs/export/yunet.tflite")
+    )
     parser.add_argument("--shape", type=int, nargs="+", default=[640, 640])
     parser.add_argument("--onnx-file", type=Path, default=None)
-    parser.add_argument("--work-dir", type=Path, default=Path("work_dirs/export/tflite_build"))
+    parser.add_argument(
+        "--work-dir", type=Path, default=Path("work_dirs/export/tflite_build")
+    )
     parser.add_argument("--keep-intermediate", action="store_true")
     parser.add_argument("--onnx2tf-command", default="onnx2tf")
     parser.add_argument("--extra-onnx2tf-args", nargs=argparse.REMAINDER, default=[])
@@ -94,7 +98,9 @@ def _find_tflite_file(output_dir: Path) -> Path:
     if not candidates:
         candidates = sorted(output_dir.rglob("*.tflite"))
     if not candidates:
-        raise FileNotFoundError(f"onnx2tf did not produce a .tflite file under {output_dir}")
+        raise FileNotFoundError(
+            f"onnx2tf did not produce a .tflite file under {output_dir}"
+        )
     return candidates[0]
 
 

@@ -13,4 +13,6 @@ COCO8_TRAIN_IMAGE_DIR = COCO8_POSE_ROOT / "images" / "train"
 COCO_ROOT = DATA_ROOT / "coco-pose"
 COCO_VAL_IMAGE_DIR = COCO_ROOT / "images" / "val2017"
 COCO_TRAIN_IMAGE_DIR = COCO_ROOT / "images" / "train2017"
-COCO_PERSON_KEYPOINTS_VAL2017 = COCO_ROOT / "annotations" / "person_keypoints_val2017.json"
+COCO_PERSON_KEYPOINTS_VAL2017 = (
+    COCO_ROOT / "annotations" / "person_keypoints_val2017.json"
+)

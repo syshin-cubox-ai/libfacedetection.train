@@ -7,7 +7,12 @@ from typing import Any, Protocol
 import torch
 from torch.utils.data import DataLoader
 
-from yunet_train.engine.loop import LRScheduler, WeightAverager, evaluate_loss_epoch, train_loss_epoch
+from yunet_train.engine.loop import (
+    LRScheduler,
+    WeightAverager,
+    evaluate_loss_epoch,
+    train_loss_epoch,
+)
 
 from .types import FaceBatch
 
@@ -20,8 +25,7 @@ class Criterion(Protocol):
         boxes: list[torch.Tensor],
         labels: list[torch.Tensor],
         keypoints: list[torch.Tensor],
-    ) -> dict[str, torch.Tensor]:
-        ...
+    ) -> dict[str, torch.Tensor]: ...
 
 
 LOSS_NAMES = ("loss_cls", "loss_bbox", "loss_obj", "loss_kps", "loss_kps_rle")
@@ -43,9 +47,15 @@ def move_batch_to_device(batch: FaceBatch, device: torch.device | str) -> FaceBa
         images=batch.images.to(device, non_blocking=True),
         boxes=[boxes.to(device, non_blocking=True) for boxes in batch.boxes],
         labels=[labels.to(device, non_blocking=True) for labels in batch.labels],
-        keypoints=[keypoints.to(device, non_blocking=True) for keypoints in batch.keypoints],
-        ignored_boxes=[boxes.to(device, non_blocking=True) for boxes in batch.ignored_boxes],
-        ignored_labels=[labels.to(device, non_blocking=True) for labels in batch.ignored_labels],
+        keypoints=[
+            keypoints.to(device, non_blocking=True) for keypoints in batch.keypoints
+        ],
+        ignored_boxes=[
+            boxes.to(device, non_blocking=True) for boxes in batch.ignored_boxes
+        ],
+        ignored_labels=[
+            labels.to(device, non_blocking=True) for labels in batch.ignored_labels
+        ],
         metas=batch.metas,
     )
 
@@ -65,7 +75,9 @@ def train_one_epoch(
     logger: Callable[[str], None] | None = None,
     progress_suffix: Callable[[int], str] | None = None,
 ) -> TrainStats:
-    def format_log(epoch: int, steps: int, total_steps: int, totals: dict[str, float]) -> str:
+    def format_log(
+        epoch: int, steps: int, total_steps: int, totals: dict[str, float]
+    ) -> str:
         suffix = f" {progress_suffix(steps)}" if progress_suffix is not None else ""
         return _format_step(epoch, steps, total_steps, totals) + suffix
 
@@ -106,7 +118,9 @@ def evaluate_loss(
     return _stats_from_totals(totals, steps)
 
 
-def _compute_losses(model: torch.nn.Module, criterion: Criterion, batch: FaceBatch) -> dict[str, torch.Tensor]:
+def _compute_losses(
+    model: torch.nn.Module, criterion: Criterion, batch: FaceBatch
+) -> dict[str, torch.Tensor]:
     return criterion(
         model(batch.images),
         boxes=batch.boxes,
@@ -127,7 +141,9 @@ def _stats_from_totals(totals: dict[str, float], steps: int) -> TrainStats:
     )
 
 
-def _format_step(epoch: int, steps: int, total_steps: int, totals: dict[str, float]) -> str:
+def _format_step(
+    epoch: int, steps: int, total_steps: int, totals: dict[str, float]
+) -> str:
     return (
         f"epoch={epoch} "
         f"step={steps}/{total_steps} "

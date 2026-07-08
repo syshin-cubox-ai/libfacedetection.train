@@ -59,7 +59,9 @@ def test_bbox_overlaps_pairwise_iou() -> None:
 
     overlaps = bbox_overlaps(boxes1, boxes2)
 
-    torch.testing.assert_close(overlaps, torch.tensor([[25.0 / 175.0]]), rtol=1e-5, atol=1e-6)
+    torch.testing.assert_close(
+        overlaps, torch.tensor([[25.0 / 175.0]]), rtol=1e-5, atol=1e-6
+    )
 
 
 def test_simota_assigner_matches_foreground_prior() -> None:
@@ -85,4 +87,3 @@ def test_simota_assigner_matches_foreground_prior() -> None:
     assert result.gt_inds.tolist() == [1, 0]
     assert result.labels.tolist() == [0, -1]
     assert result.max_overlaps[0] > 0.99
-

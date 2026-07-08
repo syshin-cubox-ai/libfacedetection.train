@@ -15,7 +15,9 @@ def _coco8_pose_root() -> Path:
     return COCO8_POSE_ROOT
 
 
-@pytest.mark.skipif(not _coco8_pose_root().exists(), reason="data/coco8-pose is not available")
+@pytest.mark.skipif(
+    not _coco8_pose_root().exists(), reason="data/coco8-pose is not available"
+)
 def test_pose_overfit_check_detects_loss_decrease() -> None:
     work_dir = Path(__file__).resolve().parent / "output" / "pose_overfit_check"
     if work_dir.exists():

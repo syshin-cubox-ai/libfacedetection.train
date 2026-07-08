@@ -35,4 +35,3 @@ def kps_encode(priors: torch.Tensor, keypoints: torch.Tensor) -> torch.Tensor:
         ],
         dim=-1,
     )
-

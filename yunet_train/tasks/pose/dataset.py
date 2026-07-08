@@ -59,7 +59,9 @@ class YOLOPoseDataset(Dataset):
 
     def _collect_records(self) -> list[PoseRecord]:
         if not self.image_dir.exists():
-            raise FileNotFoundError(f"Pose image directory does not exist: {self.image_dir}")
+            raise FileNotFoundError(
+                f"Pose image directory does not exist: {self.image_dir}"
+            )
 
         records: list[PoseRecord] = []
         for image_path in sorted(self.image_dir.rglob("*")):
@@ -67,10 +69,18 @@ class YOLOPoseDataset(Dataset):
                 continue
             rel = image_path.relative_to(self.image_dir)
             label_path = (self.label_dir / rel).with_suffix(".txt")
-            records.append(PoseRecord(image_path=image_path, label_path=label_path, filename=rel.as_posix()))
+            records.append(
+                PoseRecord(
+                    image_path=image_path,
+                    label_path=label_path,
+                    filename=rel.as_posix(),
+                )
+            )
         return records
 
-    def _resolve_split_dir(self, kind: str, split: str, override: str | Path | None) -> Path:
+    def _resolve_split_dir(
+        self, kind: str, split: str, override: str | Path | None
+    ) -> Path:
         if override is not None:
             path = Path(override)
             return path if path.is_absolute() else self.root / path
@@ -93,7 +103,11 @@ class YOLOPoseDataset(Dataset):
         if not label_path.exists():
             return _empty_targets(kpt_num, kpt_dim)
 
-        rows = [line.strip() for line in label_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        rows = [
+            line.strip()
+            for line in label_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
         if not rows:
             return _empty_targets(kpt_num, kpt_dim)
 
@@ -105,7 +119,9 @@ class YOLOPoseDataset(Dataset):
         for line_no, row in enumerate(rows, start=1):
             values = [float(value) for value in row.split()]
             if len(values) != expected:
-                raise ValueError(f"{label_path}:{line_no} expected {expected} values, got {len(values)}")
+                raise ValueError(
+                    f"{label_path}:{line_no} expected {expected} values, got {len(values)}"
+                )
 
             cls_id = int(values[0])
             cx, cy, box_w, box_h = values[1:5]
@@ -123,13 +139,17 @@ class YOLOPoseDataset(Dataset):
 
         labels_array = np.array(labels, dtype=np.int64)
         boxes_array = np.array(boxes, dtype=np.float32).reshape(-1, 4)
-        keypoints_array = np.array(keypoints, dtype=np.float32).reshape(-1, kpt_num, kpt_dim)
+        keypoints_array = np.array(keypoints, dtype=np.float32).reshape(
+            -1, kpt_num, kpt_dim
+        )
         boxes_array = _clip_boxes(boxes_array, width, height)
         keypoints_array = _clip_keypoints(keypoints_array, width, height)
         return labels_array, boxes_array, keypoints_array
 
 
-def _empty_targets(kpt_num: int, kpt_dim: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _empty_targets(
+    kpt_num: int, kpt_dim: int
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return (
         np.zeros((0,), dtype=np.int64),
         np.zeros((0, 4), dtype=np.float32),
@@ -148,8 +168,17 @@ def _clip_boxes(boxes: np.ndarray, width: int, height: int) -> np.ndarray:
 def _clip_keypoints(keypoints: np.ndarray, width: int, height: int) -> np.ndarray:
     if keypoints.size == 0:
         return keypoints
-    visible = keypoints[..., 2] > 0 if keypoints.shape[-1] >= 3 else np.ones(keypoints.shape[:2], dtype=bool)
-    outside = (keypoints[..., 0] < 0) | (keypoints[..., 0] > width) | (keypoints[..., 1] < 0) | (keypoints[..., 1] > height)
+    visible = (
+        keypoints[..., 2] > 0
+        if keypoints.shape[-1] >= 3
+        else np.ones(keypoints.shape[:2], dtype=bool)
+    )
+    outside = (
+        (keypoints[..., 0] < 0)
+        | (keypoints[..., 0] > width)
+        | (keypoints[..., 1] < 0)
+        | (keypoints[..., 1] > height)
+    )
     if keypoints.shape[-1] >= 3:
         keypoints[..., 2] = np.where(visible & ~outside, keypoints[..., 2], 0)
     keypoints[..., 0] = np.clip(keypoints[..., 0], 0, width)

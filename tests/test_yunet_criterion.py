@@ -5,7 +5,9 @@ import torch
 from yunet_train.tasks.face import YuNetCriterion
 
 
-def _single_level_preds() -> tuple[list[torch.Tensor], list[torch.Tensor], list[torch.Tensor], list[torch.Tensor]]:
+def _single_level_preds() -> tuple[
+    list[torch.Tensor], list[torch.Tensor], list[torch.Tensor], list[torch.Tensor]
+]:
     cls_scores = [torch.tensor([[[[4.0]]]], requires_grad=True)]
     bbox_preds = [
         torch.tensor(
@@ -75,4 +77,3 @@ def test_yunet_criterion_handles_images_without_ground_truth() -> None:
     assert losses["loss_kps"].item() == 0.0
     assert losses["loss_obj"].item() > 0.0
     assert preds[2][0].grad is not None
-

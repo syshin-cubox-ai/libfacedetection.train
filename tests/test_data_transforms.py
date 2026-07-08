@@ -53,14 +53,18 @@ def test_resize_scales_boxes_and_keypoints() -> None:
 
     assert sample.image.shape == (8, 12, 3)
     np.testing.assert_allclose(sample.boxes, [[2, 2, 8, 6]])
-    np.testing.assert_allclose(sample.keypoints[0, :, :2], [[2, 2], [8, 2], [4, 4], [2, 6], [8, 6]])
+    np.testing.assert_allclose(
+        sample.keypoints[0, :, :2], [[2, 2], [8, 2], [4, 4], [2, 6], [8, 6]]
+    )
 
 
 def test_horizontal_flip_keeps_legacy_keypoint_order() -> None:
     sample = RandomHorizontalFlip(1.0)(_sample())
 
     np.testing.assert_allclose(sample.boxes, [[2, 1, 5, 3]])
-    np.testing.assert_allclose(sample.keypoints[0, :, :2], [[2, 1], [5, 1], [4, 2], [2, 3], [5, 3]])
+    np.testing.assert_allclose(
+        sample.keypoints[0, :, :2], [[2, 1], [5, 1], [4, 2], [2, 3], [5, 3]]
+    )
     assert sample.flip is True
     assert sample.flip_direction == "horizontal"
 
@@ -92,7 +96,9 @@ def test_random_grayscale_keeps_three_channels_and_geometry() -> None:
     np.testing.assert_array_equal(result.image[:, :, 1], result.image[:, :, 2])
     # boxes / keypoints are untouched by a color-only transform
     np.testing.assert_allclose(result.boxes, [[1, 1, 4, 3]])
-    np.testing.assert_allclose(result.keypoints[0, :, :2], [[1, 1], [4, 1], [2, 2], [1, 3], [4, 3]])
+    np.testing.assert_allclose(
+        result.keypoints[0, :, :2], [[1, 1], [4, 1], [2, 2], [1, 3], [4, 3]]
+    )
 
 
 def test_random_grayscale_rejects_out_of_range_probability() -> None:
@@ -106,7 +112,9 @@ def test_random_square_crop_can_pad_outside_image() -> None:
         image=np.zeros((4, 4, 3), dtype=np.uint8),
         boxes=np.array([[0, 0, 4, 4]], dtype=np.float32),
         labels=np.array([0], dtype=np.int64),
-        keypoints=np.array([[[0, 0, 1], [4, 0, 1], [2, 2, 1], [0, 4, 1], [4, 4, 1]]], dtype=np.float32),
+        keypoints=np.array(
+            [[[0, 0, 1], [4, 0, 1], [2, 2, 1], [0, 4, 1], [4, 4, 1]]], dtype=np.float32
+        ),
         ignored_boxes=np.zeros((0, 4), dtype=np.float32),
         ignored_labels=np.zeros((0,), dtype=np.int64),
         filename="synthetic.jpg",
@@ -160,7 +168,9 @@ def test_to_tensor_and_collate_face_samples() -> None:
     assert batch.metas[0]["filename"] == "synthetic.jpg"
 
 
-def test_widerface_dataset_loads_image_and_applies_transform(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_widerface_dataset_loads_image_and_applies_transform(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import yunet_train.tasks.face.dataset as dataset_module
 
     def fake_imread(path: str, flags: int) -> np.ndarray:
@@ -170,8 +180,17 @@ def test_widerface_dataset_loads_image_and_applies_transform(monkeypatch: pytest
 
     monkeypatch.setattr(dataset_module.cv2, "imread", fake_imread)
     dataset = WIDERFaceDataset(
-        ann_file=Path(__file__).resolve().parents[1] / "data" / "widerface" / "labelv2" / "train" / "labelv2.txt",
-        img_prefix=Path(__file__).resolve().parents[1] / "data" / "widerface" / "WIDER_train" / "images",
+        ann_file=Path(__file__).resolve().parents[1]
+        / "data"
+        / "widerface"
+        / "labelv2"
+        / "train"
+        / "labelv2.txt",
+        img_prefix=Path(__file__).resolve().parents[1]
+        / "data"
+        / "widerface"
+        / "WIDER_train"
+        / "images",
         transform=ToTensor(),
     )
 

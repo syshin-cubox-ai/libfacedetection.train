@@ -6,7 +6,12 @@ from torch.utils.data import DataLoader
 
 from yunet_train.tasks.face import FaceSample, ToTensor, collate_face_samples
 from yunet_train.engine import LinearWarmupMultiStepLR
-from yunet_train.tasks.face import YuNetCriterion, build_yunet, evaluate_loss, train_one_epoch
+from yunet_train.tasks.face import (
+    YuNetCriterion,
+    build_yunet,
+    evaluate_loss,
+    train_one_epoch,
+)
 
 
 def _training_sample() -> FaceSample:

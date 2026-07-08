@@ -44,10 +44,14 @@ class OverfitCheckResult:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Check whether YuNet pose can overfit a tiny YOLO-pose subset.")
+    parser = argparse.ArgumentParser(
+        description="Check whether YuNet pose can overfit a tiny YOLO-pose subset."
+    )
     parser.add_argument("--data-root", type=Path, default=COCO8_POSE_ROOT)
     parser.add_argument("--variant", default="yunet_n", choices=("yunet_n", "yunet_s"))
-    parser.add_argument("--work-dir", type=Path, default=Path("work_dirs/pose_overfit_check"))
+    parser.add_argument(
+        "--work-dir", type=Path, default=Path("work_dirs/pose_overfit_check")
+    )
     parser.add_argument("--image-size", type=int, default=160)
     parser.add_argument("--samples", type=int, default=4)
     parser.add_argument("--epochs", type=int, default=120)
@@ -55,7 +59,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--workers", type=int, default=0)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=0.0)
-    parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument(
+        "--device", default="cuda" if torch.cuda.is_available() else "cpu"
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--min-loss-ratio", type=float, default=0.8)
     parser.add_argument("--augment", action="store_true")
@@ -94,11 +100,17 @@ def run_overfit_check(args: argparse.Namespace) -> OverfitCheckResult:
 
     model = build_yunet_pose(args.variant, kpt_shape=(17, 3)).to(device)
     criterion = YuNetPoseCriterion(strides=(8, 16, 32), kpt_shape=(17, 3))
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = torch.optim.AdamW(
+        model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+    )
 
     metrics_path = args.work_dir / "overfit_metrics.csv"
-    initial_stats = evaluate_pose_loss(model=model, criterion=criterion, data_loader=loader, device=device)
-    rows: list[dict[str, float | int]] = [_row_from_stats(0, initial_stats, train_stats=None)]
+    initial_stats = evaluate_pose_loss(
+        model=model, criterion=criterion, data_loader=loader, device=device
+    )
+    rows: list[dict[str, float | int]] = [
+        _row_from_stats(0, initial_stats, train_stats=None)
+    ]
     _write_rows(metrics_path, rows)
 
     best_loss = initial_stats.loss
@@ -113,7 +125,9 @@ def run_overfit_check(args: argparse.Namespace) -> OverfitCheckResult:
             device=device,
             epoch=epoch,
         )
-        final_stats = evaluate_pose_loss(model=model, criterion=criterion, data_loader=loader, device=device)
+        final_stats = evaluate_pose_loss(
+            model=model, criterion=criterion, data_loader=loader, device=device
+        )
         if final_stats.loss < best_loss:
             best_loss = final_stats.loss
             best_epoch = epoch
@@ -121,7 +135,10 @@ def run_overfit_check(args: argparse.Namespace) -> OverfitCheckResult:
         _write_rows(metrics_path, rows)
 
     required_best_loss = initial_stats.loss * args.min_loss_ratio
-    passed = best_loss <= required_best_loss and torch.isfinite(torch.tensor(final_stats.loss)).item()
+    passed = (
+        best_loss <= required_best_loss
+        and torch.isfinite(torch.tensor(final_stats.loss)).item()
+    )
     result = OverfitCheckResult(
         passed=passed,
         initial_loss=initial_stats.loss,
@@ -151,11 +168,15 @@ def run_overfit_check(args: argparse.Namespace) -> OverfitCheckResult:
 
 def _build_dataset(args: argparse.Namespace) -> YOLOPoseDataset:
     transform = (
-        build_pose_train_transforms(args.image_size, flip_idx=COCO17_FLIP_IDX, random_crop=False)
+        build_pose_train_transforms(
+            args.image_size, flip_idx=COCO17_FLIP_IDX, random_crop=False
+        )
         if args.augment
         else build_pose_eval_transforms(args.image_size)
     )
-    dataset = YOLOPoseDataset(args.data_root, split="train", transform=transform, kpt_shape=(17, 3))
+    dataset = YOLOPoseDataset(
+        args.data_root, split="train", transform=transform, kpt_shape=(17, 3)
+    )
     dataset.records = dataset.records[: args.samples]
     if len(dataset) == 0:
         raise ValueError(f"No pose samples found under {args.data_root}")
@@ -235,7 +256,10 @@ def _set_seed(seed: int) -> None:
 
 
 def _serializable_config(args: argparse.Namespace) -> dict[str, Any]:
-    return {key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()}
+    return {
+        key: str(value) if isinstance(value, Path) else value
+        for key, value in vars(args).items()
+    }
 
 
 if __name__ == "__main__":

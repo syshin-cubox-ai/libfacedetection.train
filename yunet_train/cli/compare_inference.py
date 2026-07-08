@@ -81,10 +81,16 @@ class TimeEngine:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Compare ONNX face detector inference.")
+    parser = argparse.ArgumentParser(
+        description="Compare ONNX face detector inference."
+    )
     parser.add_argument("model_file", type=Path, help="ONNX model file path")
-    parser.add_argument("--eval", action="store_true", help="evaluate on WIDER Face val")
-    parser.add_argument("--image", type=Path, default=None, help="image path for single-image inference")
+    parser.add_argument(
+        "--eval", action="store_true", help="evaluate on WIDER Face val"
+    )
+    parser.add_argument(
+        "--image", type=Path, default=None, help="image path for single-image inference"
+    )
     parser.add_argument("--out-dir", type=Path, default=Path("work_dirs/sample"))
     parser.add_argument(
         "--mode",
@@ -120,7 +126,9 @@ def main() -> None:
             limit_samples=args.limit_samples,
             save_preds=args.save_preds,
         )
-        print(f"WIDERFace AP easy={aps.easy:.6f} medium={aps.medium:.6f} hard={aps.hard:.6f}")
+        print(
+            f"WIDERFace AP easy={aps.easy:.6f} medium={aps.medium:.6f} hard={aps.hard:.6f}"
+        )
         return
 
     if args.image is None:
@@ -176,14 +184,20 @@ def evaluate_onnx_detector(
         widerface_boxes = xyxy_score_to_xywh_score(boxes)
         add_prediction(predictions, sample.filename, widerface_boxes)
     collect_seconds = perf_counter() - collect_start
-    print(f"Collected predictions for {len(dataset)} images in {collect_seconds:.2f}s", flush=True)
+    print(
+        f"Collected predictions for {len(dataset)} images in {collect_seconds:.2f}s",
+        flush=True,
+    )
     print_timing(detector)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     if save_preds:
         write_start = perf_counter()
         write_widerface_predictions(predictions, output_dir / "predictions")
-        print(f"Wrote WIDER Face predictions in {perf_counter() - write_start:.2f}s", flush=True)
+        print(
+            f"Wrote WIDER Face predictions in {perf_counter() - write_start:.2f}s",
+            flush=True,
+        )
 
     eval_start = perf_counter()
     print("Computing WIDER Face AP for easy/medium/hard splits...", flush=True)
@@ -346,12 +360,16 @@ class OnnxDetector:
         self.nms_thresh = nms_thresh
         model = onnx.load(str(model_file))
         onnx.checker.check_model(model)
-        self.session = onnxruntime.InferenceSession(str(model_file), providers=onnxruntime.get_available_providers())
+        self.session = onnxruntime.InferenceSession(
+            str(model_file), providers=onnxruntime.get_available_providers()
+        )
         self.input_name = self.session.get_inputs()[0].name
         self.output_names = [output.name for output in self.session.get_outputs()]
         self.time_engine = TimeEngine()
 
-    def detect(self, image: np.ndarray, *, score_thresh: float, mode: str) -> tuple[np.ndarray, np.ndarray | None]:
+    def detect(
+        self, image: np.ndarray, *, score_thresh: float, mode: str
+    ) -> tuple[np.ndarray, np.ndarray | None]:
         raise NotImplementedError
 
 
@@ -363,7 +381,9 @@ class YUNET(OnnxDetector):
         self.strides = (8, 16, 32)
         self.keypoint_count = 5
 
-    def forward(self, image: np.ndarray, score_thresh: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def forward(
+        self, image: np.ndarray, score_thresh: float
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         self.time_engine.tic("forward_calc")
         input_size = tuple(image.shape[0:2][::-1])
         blob = np.transpose(image, (2, 0, 1)).astype(np.float32)[np.newaxis, ...].copy()
@@ -379,7 +399,9 @@ class YUNET(OnnxDetector):
             cls_pred = outputs[level_idx].reshape(-1, 1)
             obj_pred = outputs[level_idx + len(self.strides)].reshape(-1, 1)
             reg_pred = outputs[level_idx + len(self.strides) * 2].reshape(-1, 4)
-            kps_pred = outputs[level_idx + len(self.strides) * 3].reshape(-1, self.keypoint_count * 2)
+            kps_pred = outputs[level_idx + len(self.strides) * 3].reshape(
+                -1, self.keypoint_count * 2
+            )
 
             anchor_centers = np.stack(
                 np.mgrid[: input_size[1] // stride, : input_size[0] // stride][::-1],
@@ -418,7 +440,9 @@ class YUNET(OnnxDetector):
         self.time_engine.toc("forward_calc")
         return boxes_array[keep], scores_array[keep], keypoints_array[keep]
 
-    def detect(self, image: np.ndarray, *, score_thresh: float, mode: str) -> tuple[np.ndarray, np.ndarray | None]:
+    def detect(
+        self, image: np.ndarray, *, score_thresh: float, mode: str
+    ) -> tuple[np.ndarray, np.ndarray | None]:
         self.time_engine.tic("preprocess")
         det_image, det_scale = resize_image(image, mode)
         self.time_engine.toc("preprocess")
@@ -463,10 +487,14 @@ class SCRFD(OnnxDetector):
         else:
             raise ValueError(f"Unsupported SCRFD output count: {output_count}")
 
-    def forward(self, image: np.ndarray, score_thresh: float) -> tuple[list[np.ndarray], list[np.ndarray], list[np.ndarray]]:
+    def forward(
+        self, image: np.ndarray, score_thresh: float
+    ) -> tuple[list[np.ndarray], list[np.ndarray], list[np.ndarray]]:
         self.time_engine.tic("forward_calc")
         input_size = tuple(image.shape[0:2][::-1])
-        blob = cv2.dnn.blobFromImage(image, 1.0 / 128, input_size, (127.5, 127.5, 127.5), swapRB=True)
+        blob = cv2.dnn.blobFromImage(
+            image, 1.0 / 128, input_size, (127.5, 127.5, 127.5), swapRB=True
+        )
         self.time_engine.toc("forward_calc")
 
         self.time_engine.tic("forward_run")
@@ -478,16 +506,28 @@ class SCRFD(OnnxDetector):
         input_height, input_width = blob.shape[2], blob.shape[3]
         for idx, stride in enumerate(self.strides):
             scores = outputs[idx][0] if self.batched else outputs[idx]
-            bbox_preds = (outputs[idx + self.fmc][0] if self.batched else outputs[idx + self.fmc]) * stride
+            bbox_preds = (
+                outputs[idx + self.fmc][0] if self.batched else outputs[idx + self.fmc]
+            ) * stride
             if self.use_kps:
-                kps_preds = (outputs[idx + self.fmc * 2][0] if self.batched else outputs[idx + self.fmc * 2]) * stride
+                kps_preds = (
+                    outputs[idx + self.fmc * 2][0]
+                    if self.batched
+                    else outputs[idx + self.fmc * 2]
+                ) * stride
 
-            anchor_centers = self._anchor_centers(input_height // stride, input_width // stride, stride)
+            anchor_centers = self._anchor_centers(
+                input_height // stride, input_width // stride, stride
+            )
             pos_indices = np.where(scores >= score_thresh)[0]
             scores_list.append(scores[pos_indices])
             boxes_list.append(distance2bbox(anchor_centers, bbox_preds)[pos_indices])
             if self.use_kps:
-                keypoints_list.append(distance2kps(anchor_centers, kps_preds).reshape((-1, 5, 2))[pos_indices])
+                keypoints_list.append(
+                    distance2kps(anchor_centers, kps_preds).reshape((-1, 5, 2))[
+                        pos_indices
+                    ]
+                )
 
         self.time_engine.toc("forward_calc")
         return scores_list, boxes_list, keypoints_list
@@ -506,7 +546,9 @@ class SCRFD(OnnxDetector):
             self.center_cache[key] = centers
         return centers
 
-    def detect(self, image: np.ndarray, *, score_thresh: float, mode: str) -> tuple[np.ndarray, np.ndarray | None]:
+    def detect(
+        self, image: np.ndarray, *, score_thresh: float, mode: str
+    ) -> tuple[np.ndarray, np.ndarray | None]:
         self.time_engine.tic("preprocess")
         det_image, det_scale = resize_image(image, mode)
         self.time_engine.toc("preprocess")
@@ -518,7 +560,11 @@ class SCRFD(OnnxDetector):
         boxes = np.vstack(boxes_list) / det_scale
         detections = np.hstack((boxes, scores)).astype(np.float32, copy=False)
         keep = nms(detections, self.nms_thresh)
-        keypoints = np.vstack(keypoints_list) / det_scale if self.use_kps and keypoints_list else None
+        keypoints = (
+            np.vstack(keypoints_list) / det_scale
+            if self.use_kps and keypoints_list
+            else None
+        )
         self.time_engine.toc("postprocess")
         return detections[keep], None if keypoints is None else keypoints[keep]
 
@@ -526,10 +572,15 @@ class SCRFD(OnnxDetector):
 class YOLO5FACE(OnnxDetector):
     taskname = "yolo5face"
 
-    def forward(self, image: np.ndarray, score_thresh: float) -> tuple[np.ndarray, np.ndarray]:
+    def forward(
+        self, image: np.ndarray, score_thresh: float
+    ) -> tuple[np.ndarray, np.ndarray]:
         self.time_engine.tic("forward_calc")
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        blob = np.transpose(image[np.newaxis, ...], (0, 3, 1, 2)).copy().astype(np.float32) / 255.0
+        blob = (
+            np.transpose(image[np.newaxis, ...], (0, 3, 1, 2)).copy().astype(np.float32)
+            / 255.0
+        )
         self.time_engine.toc("forward_calc")
 
         self.time_engine.tic("forward_run")
@@ -549,7 +600,9 @@ class YOLO5FACE(OnnxDetector):
         self.time_engine.toc("forward_calc")
         return boxes, scores
 
-    def detect(self, image: np.ndarray, *, score_thresh: float, mode: str) -> tuple[np.ndarray, np.ndarray | None]:
+    def detect(
+        self, image: np.ndarray, *, score_thresh: float, mode: str
+    ) -> tuple[np.ndarray, np.ndarray | None]:
         self.time_engine.tic("preprocess")
         det_image, det_scale = resize_image(image, mode)
         self.time_engine.toc("preprocess")
@@ -558,7 +611,9 @@ class YOLO5FACE(OnnxDetector):
 
         self.time_engine.tic("postprocess")
         boxes = boxes / det_scale
-        detections = np.hstack((boxes[:, :4], scores[:, None])).astype(np.float32, copy=False)
+        detections = np.hstack((boxes[:, :4], scores[:, None])).astype(
+            np.float32, copy=False
+        )
         keep = nms(detections, self.nms_thresh)
         self.time_engine.toc("postprocess")
         return detections[keep], boxes[keep, 4:]
@@ -574,16 +629,25 @@ class RETINAFACE(OnnxDetector):
     def anchor_fn(self, shape: tuple[int, int]) -> np.ndarray:
         min_sizes_cfg = ((16, 32), (64, 128), (256, 512))
         steps = (8, 16, 32)
-        feature_maps = [[ceil(shape[0] / step), ceil(shape[1] / step)] for step in steps]
+        feature_maps = [
+            [ceil(shape[0] / step), ceil(shape[1] / step)] for step in steps
+        ]
         anchors = []
         for idx, feature_map in enumerate(feature_maps):
             for row, col in product(range(feature_map[0]), range(feature_map[1])):
                 for min_size in min_sizes_cfg[idx]:
-                    anchors.extend([(col + 0.5) * steps[idx] / shape[1], (row + 0.5) * steps[idx] / shape[0]])
+                    anchors.extend(
+                        [
+                            (col + 0.5) * steps[idx] / shape[1],
+                            (row + 0.5) * steps[idx] / shape[0],
+                        ]
+                    )
                     anchors.extend([min_size / shape[1], min_size / shape[0]])
         return np.array(anchors, dtype=np.float32).reshape(-1, 4)
 
-    def decode(self, loc: np.ndarray, priors: np.ndarray, variances: tuple[float, float]) -> np.ndarray:
+    def decode(
+        self, loc: np.ndarray, priors: np.ndarray, variances: tuple[float, float]
+    ) -> np.ndarray:
         boxes = np.concatenate(
             (
                 priors[:, :2] + loc[:, :2] * variances[0] * priors[:, 2:],
@@ -595,13 +659,20 @@ class RETINAFACE(OnnxDetector):
         boxes[:, 2:] += boxes[:, :2]
         return boxes
 
-    def decode_landmarks(self, pred: np.ndarray, priors: np.ndarray, variances: tuple[float, float]) -> np.ndarray:
+    def decode_landmarks(
+        self, pred: np.ndarray, priors: np.ndarray, variances: tuple[float, float]
+    ) -> np.ndarray:
         return np.concatenate(
-            [priors[:, :2] + pred[:, i : i + 2] * variances[0] * priors[:, 2:] for i in range(0, 10, 2)],
+            [
+                priors[:, :2] + pred[:, i : i + 2] * variances[0] * priors[:, 2:]
+                for i in range(0, 10, 2)
+            ],
             axis=1,
         )
 
-    def forward(self, image: np.ndarray, score_thresh: float, priors: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    def forward(
+        self, image: np.ndarray, score_thresh: float, priors: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
         self.time_engine.tic("forward_calc")
         blob = image.astype(np.float32)
         blob -= (104, 117, 123)
@@ -615,7 +686,9 @@ class RETINAFACE(OnnxDetector):
         self.time_engine.tic("forward_calc")
         scores = conf.squeeze(0)[:, 1]
         boxes = self.decode(loc.squeeze(0), priors, variances=(0.1, 0.2))
-        landmarks = self.decode_landmarks(landmarks.squeeze(0), priors, variances=(0.1, 0.2))
+        landmarks = self.decode_landmarks(
+            landmarks.squeeze(0), priors, variances=(0.1, 0.2)
+        )
         boxes = np.concatenate((boxes, landmarks), axis=1)
         _, _, height, width = blob.shape
         boxes[:, 0::2] *= width
@@ -624,7 +697,9 @@ class RETINAFACE(OnnxDetector):
         self.time_engine.toc("forward_calc")
         return boxes[keep], scores[keep]
 
-    def detect(self, image: np.ndarray, *, score_thresh: float, mode: str) -> tuple[np.ndarray, np.ndarray | None]:
+    def detect(
+        self, image: np.ndarray, *, score_thresh: float, mode: str
+    ) -> tuple[np.ndarray, np.ndarray | None]:
         self.time_engine.tic("preprocess")
         det_image, det_scale = resize_image(image, mode)
         if mode.upper() in {"ORIGIN", "AUTO"}:
@@ -639,7 +714,9 @@ class RETINAFACE(OnnxDetector):
 
         self.time_engine.tic("postprocess")
         boxes = boxes / det_scale
-        detections = np.hstack((boxes[:, :4], scores[:, None])).astype(np.float32, copy=False)
+        detections = np.hstack((boxes[:, :4], scores[:, None])).astype(
+            np.float32, copy=False
+        )
         keep = nms(detections, self.nms_thresh)
         self.time_engine.toc("postprocess")
         return detections[keep], boxes[keep, 4:]

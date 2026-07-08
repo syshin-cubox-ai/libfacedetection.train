@@ -38,7 +38,12 @@ class YuNetPosePostprocessor:
     @torch.no_grad()
     def __call__(
         self,
-        preds: tuple[list[torch.Tensor], list[torch.Tensor], list[torch.Tensor], list[torch.Tensor]],
+        preds: tuple[
+            list[torch.Tensor],
+            list[torch.Tensor],
+            list[torch.Tensor],
+            list[torch.Tensor],
+        ],
     ) -> list[PoseDetectionResult]:
         cls_scores, bbox_preds, objectnesses, kpt_preds = preds
         num_imgs = cls_scores[0].shape[0]
@@ -50,14 +55,20 @@ class YuNetPosePostprocessor:
             with_stride=True,
         )
         flatten_priors = torch.cat(priors, dim=0)
-        flatten_cls_scores = _flatten_preds(cls_scores, num_imgs, cls_scores[0].shape[1]).sigmoid()
+        flatten_cls_scores = _flatten_preds(
+            cls_scores, num_imgs, cls_scores[0].shape[1]
+        ).sigmoid()
         flatten_bbox_preds = _flatten_preds(bbox_preds, num_imgs, 4)
-        flatten_objectness = _flatten_preds(objectnesses, num_imgs, 1).squeeze(-1).sigmoid()
+        flatten_objectness = (
+            _flatten_preds(objectnesses, num_imgs, 1).squeeze(-1).sigmoid()
+        )
         flatten_kpt_preds = _flatten_preds(kpt_preds, num_imgs, kpt_preds[0].shape[1])
 
         expanded_priors = flatten_priors.unsqueeze(0).repeat(num_imgs, 1, 1)
         decoded_boxes = bbox_decode(expanded_priors, flatten_bbox_preds)
-        decoded_keypoints = pose_keypoints_decode(expanded_priors, flatten_kpt_preds, kpt_shape=self.kpt_shape)
+        decoded_keypoints = pose_keypoints_decode(
+            expanded_priors, flatten_kpt_preds, kpt_shape=self.kpt_shape
+        )
         if self.kpt_shape[1] >= 3:
             decoded_keypoints[..., 2] = decoded_keypoints[..., 2].sigmoid()
 
@@ -86,6 +97,10 @@ class YuNetPosePostprocessor:
         return results
 
 
-def _flatten_preds(preds: list[torch.Tensor], num_imgs: int, channels: int) -> torch.Tensor:
-    flattened = [pred.permute(0, 2, 3, 1).reshape(num_imgs, -1, channels) for pred in preds]
+def _flatten_preds(
+    preds: list[torch.Tensor], num_imgs: int, channels: int
+) -> torch.Tensor:
+    flattened = [
+        pred.permute(0, 2, 3, 1).reshape(num_imgs, -1, channels) for pred in preds
+    ]
     return torch.cat(flattened, dim=1)

@@ -14,7 +14,9 @@ from yunet_train.tasks.face import (
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Check WIDER Face paths before training.")
+    parser = argparse.ArgumentParser(
+        description="Check WIDER Face paths before training."
+    )
     parser.add_argument("--root", type=Path, default=WIDERFACE_ROOT)
     parser.add_argument("--split", choices=("train", "val"), default="train")
     parser.add_argument("--check-images", type=int, default=10)
@@ -62,7 +64,9 @@ def _resolve_split_paths(root: Path, split: str) -> tuple[Path, Path]:
     if ann_file.exists() or image_dir.exists():
         return ann_file, image_dir
 
-    return root / "labelv2" / split / "labelv2.txt", root / ("WIDER_train" if split == "train" else "WIDER_val") / "images"
+    return root / "labelv2" / split / "labelv2.txt", root / (
+        "WIDER_train" if split == "train" else "WIDER_val"
+    ) / "images"
 
 
 if __name__ == "__main__":

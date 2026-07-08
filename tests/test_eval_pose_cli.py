@@ -17,7 +17,9 @@ def _coco8_pose_root() -> Path:
     return COCO8_POSE_ROOT
 
 
-@pytest.mark.skipif(not _coco8_pose_root().exists(), reason="data/coco8-pose is not available")
+@pytest.mark.skipif(
+    not _coco8_pose_root().exists(), reason="data/coco8-pose is not available"
+)
 def test_eval_pose_cli_smoke_writes_metrics_and_visualization() -> None:
     work_dir = Path(__file__).resolve().parent / "output" / "eval_pose_cli"
     if work_dir.exists():

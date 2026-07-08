@@ -35,4 +35,3 @@ class TFPN(nn.Module):
 
         feats[0] = self.lateral_convs[0](feats[0])
         return [feats[i] for i in self.out_idx]
-

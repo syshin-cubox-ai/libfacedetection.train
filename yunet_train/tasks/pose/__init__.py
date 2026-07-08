@@ -5,7 +5,14 @@ from .coco_json_dataset import CocoJsonPoseDataset
 from .dataset import YOLOPoseDataset
 from .losses import keypoint_visibility_loss, oks_keypoint_loss
 from .model import YuNetPose, YuNetPoseHead, build_yunet_pose
-from .paths import COCO8_POSE_ROOT, COCO_PERSON_KEYPOINTS_VAL2017, COCO_ROOT, COCO_VAL_IMAGE_DIR, DATA_ROOT, REPO_ROOT
+from .paths import (
+    COCO8_POSE_ROOT,
+    COCO_PERSON_KEYPOINTS_VAL2017,
+    COCO_ROOT,
+    COCO_VAL_IMAGE_DIR,
+    DATA_ROOT,
+    REPO_ROOT,
+)
 from .postprocess import PoseDetectionResult, YuNetPosePostprocessor
 from .transforms import (
     Compose,
@@ -19,7 +26,12 @@ from .transforms import (
     build_pose_eval_transforms,
     build_pose_train_transforms,
 )
-from .trainer import PoseTrainStats, evaluate_pose_loss, move_pose_batch_to_device, train_pose_one_epoch
+from .trainer import (
+    PoseTrainStats,
+    evaluate_pose_loss,
+    move_pose_batch_to_device,
+    train_pose_one_epoch,
+)
 from .types import PoseBatch, PoseRecord, PoseSample
 from .visualize import COCO17_SKELETON, pose_sample_annotation_text, render_pose_sample
 

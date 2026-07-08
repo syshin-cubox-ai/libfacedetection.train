@@ -53,7 +53,19 @@ def test_export_pose_onnx_smoke() -> None:
     assert result == output_file
     model = onnx.load(str(output_file))
     assert len(model.graph.output) == 12
-    assert [output.name for output in model.graph.output][:3] == ["cls_8", "cls_16", "cls_32"]
-    assert [output.name for output in model.graph.output][3:6] == ["obj_8", "obj_16", "obj_32"]
-    assert [output.name for output in model.graph.output][-3:] == ["kpt_8", "kpt_16", "kpt_32"]
+    assert [output.name for output in model.graph.output][:3] == [
+        "cls_8",
+        "cls_16",
+        "cls_32",
+    ]
+    assert [output.name for output in model.graph.output][3:6] == [
+        "obj_8",
+        "obj_16",
+        "obj_32",
+    ]
+    assert [output.name for output in model.graph.output][-3:] == [
+        "kpt_8",
+        "kpt_16",
+        "kpt_32",
+    ]
     rmtree(work_dir)

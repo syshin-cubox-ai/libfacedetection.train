@@ -40,14 +40,25 @@ def render_pose_sample(
     image = _image_to_uint8_bgr(sample.image).copy()
     boxes = _as_numpy(sample.boxes).reshape(-1, 4)
     labels = _as_numpy(sample.labels).reshape(-1)
-    keypoints = _as_numpy(sample.keypoints).reshape(-1, sample.kpt_shape[0], sample.kpt_shape[1])
+    keypoints = _as_numpy(sample.keypoints).reshape(
+        -1, sample.kpt_shape[0], sample.kpt_shape[1]
+    )
 
     for idx, box in enumerate(boxes):
         color = _color_for_index(idx)
         x1, y1, x2, y2 = np.round(box).astype(int).tolist()
         cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
         label = str(int(labels[idx])) if idx < labels.shape[0] else "person"
-        cv2.putText(image, label, (x1, max(y1 - 4, 0)), cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 1, cv2.LINE_AA)
+        cv2.putText(
+            image,
+            label,
+            (x1, max(y1 - 4, 0)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            color,
+            1,
+            cv2.LINE_AA,
+        )
 
         kpts = keypoints[idx]
         for start, end in skeleton:
@@ -66,7 +77,9 @@ def render_pose_sample(
 def pose_sample_annotation_text(sample: PoseSample) -> str:
     boxes = _as_numpy(sample.boxes).reshape(-1, 4)
     labels = _as_numpy(sample.labels).reshape(-1)
-    keypoints = _as_numpy(sample.keypoints).reshape(-1, sample.kpt_shape[0], sample.kpt_shape[1])
+    keypoints = _as_numpy(sample.keypoints).reshape(
+        -1, sample.kpt_shape[0], sample.kpt_shape[1]
+    )
     lines = [
         f"filename: {sample.filename}",
         f"original_shape: {sample.original_shape}",
@@ -78,9 +91,15 @@ def pose_sample_annotation_text(sample: PoseSample) -> str:
         f"objects: {boxes.shape[0]}",
     ]
     for idx, box in enumerate(boxes):
-        visible = int((keypoints[idx, :, 2] > 0).sum()) if sample.kpt_shape[1] >= 3 else sample.kpt_shape[0]
+        visible = (
+            int((keypoints[idx, :, 2] > 0).sum())
+            if sample.kpt_shape[1] >= 3
+            else sample.kpt_shape[0]
+        )
         label = int(labels[idx]) if idx < labels.shape[0] else -1
-        lines.append(f"[{idx}] label={label} box={box.tolist()} visible_keypoints={visible}")
+        lines.append(
+            f"[{idx}] label={label} box={box.tolist()} visible_keypoints={visible}"
+        )
         lines.append(f"[{idx}] keypoints={keypoints[idx].tolist()}")
     return "\n".join(lines) + "\n"
 

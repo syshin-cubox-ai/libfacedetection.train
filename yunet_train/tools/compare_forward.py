@@ -9,12 +9,16 @@ from yunet_train.tasks.face import build_yunet
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run a lightweight YuNet forward check.")
+    parser = argparse.ArgumentParser(
+        description="Run a lightweight YuNet forward check."
+    )
     parser.add_argument("--variant", default="yunet_n", choices=("yunet_n", "yunet_s"))
     parser.add_argument("--checkpoint", type=Path, default=None)
     parser.add_argument("--height", type=int, default=640)
     parser.add_argument("--width", type=int, default=640)
-    parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument(
+        "--device", default="cuda" if torch.cuda.is_available() else "cpu"
+    )
     return parser.parse_args()
 
 
@@ -60,4 +64,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

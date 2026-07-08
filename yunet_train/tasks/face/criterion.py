@@ -106,7 +106,9 @@ class YuNetCriterion:
         flatten_priors_all = expanded_priors.reshape(-1, 4)
 
         loss_obj = (
-            F.binary_cross_entropy_with_logits(flatten_objectness_all, obj_targets, reduction="sum")
+            F.binary_cross_entropy_with_logits(
+                flatten_objectness_all, obj_targets, reduction="sum"
+            )
             / num_total_samples
             * self.loss_weights.obj
         )
@@ -131,22 +133,34 @@ class YuNetCriterion:
                 * self.loss_weights.bbox
             )
             encoded_kps = kps_encode(flatten_priors_all[pos_masks], kps_targets)
-            loss_kps = _smooth_l1_loss(
-                flatten_kps_preds_all[pos_masks],
-                encoded_kps,
-                weight=kps_weights,
-                beta=self.smooth_l1_beta,
-            ) * self.loss_weights.kps
+            loss_kps = (
+                _smooth_l1_loss(
+                    flatten_kps_preds_all[pos_masks],
+                    encoded_kps,
+                    weight=kps_weights,
+                    beta=self.smooth_l1_beta,
+                )
+                * self.loss_weights.kps
+            )
             if self.flow_model is not None and flatten_kps_sigma is not None:
                 flatten_kps_sigma_all = flatten_kps_sigma.reshape(-1, self.kps_num * 2)
                 vis_mask = kps_vis_targets > 0
-                loss_kps_rle = self._rle_loss(
-                    flatten_kps_preds_all[pos_masks].reshape(-1, self.kps_num, 2)[vis_mask],
-                    flatten_kps_sigma_all[pos_masks].reshape(-1, self.kps_num, 2)[vis_mask],
-                    encoded_kps.reshape(-1, self.kps_num, 2)[vis_mask],
-                ).clamp(min=0) * self.loss_weights.kps_rle
+                loss_kps_rle = (
+                    self._rle_loss(
+                        flatten_kps_preds_all[pos_masks].reshape(-1, self.kps_num, 2)[
+                            vis_mask
+                        ],
+                        flatten_kps_sigma_all[pos_masks].reshape(-1, self.kps_num, 2)[
+                            vis_mask
+                        ],
+                        encoded_kps.reshape(-1, self.kps_num, 2)[vis_mask],
+                    ).clamp(min=0)
+                    * self.loss_weights.kps_rle
+                )
             else:
-                loss_kps_rle = flatten_kps_preds_all.sum() * 0 + self._rle_zero(flatten_kps_sigma)
+                loss_kps_rle = flatten_kps_preds_all.sum() * 0 + self._rle_zero(
+                    flatten_kps_sigma
+                )
         else:
             # Keep every head in the autograd graph even without positives:
             # under DDP a rank whose parameters receive no gradients never
@@ -205,9 +219,7 @@ class YuNetCriterion:
         dummy = torch.zeros((1, 2), dtype=torch.float32, device=device)
         return self.flow_model.log_prob(dummy).sum() * 0
 
-    def _rle_zero(
-        self, kps_sigma: torch.Tensor | None
-    ) -> torch.Tensor | float:
+    def _rle_zero(self, kps_sigma: torch.Tensor | None) -> torch.Tensor | float:
         """Zero RLE loss that still connects the sigma head and flow model to the graph."""
         if self.flow_model is None:
             return 0.0
@@ -246,7 +258,9 @@ class YuNetCriterion:
                 "num_pos": 0,
             }
 
-        offset_priors = torch.cat([priors[:, :2] + priors[:, 2:] * 0.5, priors[:, 2:]], dim=-1)
+        offset_priors = torch.cat(
+            [priors[:, :2] + priors[:, 2:] * 0.5, priors[:, 2:]], dim=-1
+        )
         assign_result = self.assigner.assign(
             cls_preds.sigmoid() * objectness.unsqueeze(1).sigmoid(),
             offset_priors,
@@ -274,14 +288,20 @@ class YuNetCriterion:
 
         pos_labels = gt_labels[pos_assigned_gt_inds]
         pos_ious = assign_result.max_overlaps[pos_inds]
-        cls_target = F.one_hot(pos_labels, self.num_classes).to(cls_preds.dtype) * pos_ious.unsqueeze(-1)
+        cls_target = F.one_hot(pos_labels, self.num_classes).to(
+            cls_preds.dtype
+        ) * pos_ious.unsqueeze(-1)
 
         obj_target = torch.zeros_like(objectness).unsqueeze(-1)
         obj_target[pos_inds] = 1
 
         bbox_target = gt_bboxes[pos_assigned_gt_inds]
-        kps_target = gt_keypoints[pos_assigned_gt_inds, :, :2].reshape(-1, self.kps_num * 2)
-        kps_weight = torch.mean(gt_keypoints[pos_assigned_gt_inds, :, 2], dim=1, keepdim=True)
+        kps_target = gt_keypoints[pos_assigned_gt_inds, :, :2].reshape(
+            -1, self.kps_num * 2
+        )
+        kps_weight = torch.mean(
+            gt_keypoints[pos_assigned_gt_inds, :, 2], dim=1, keepdim=True
+        )
         kps_vis = gt_keypoints[pos_assigned_gt_inds, :, 2]
 
         return {
@@ -296,10 +316,11 @@ class YuNetCriterion:
         }
 
 
-def _flatten_preds(preds: list[torch.Tensor], num_imgs: int, channels: int) -> torch.Tensor:
+def _flatten_preds(
+    preds: list[torch.Tensor], num_imgs: int, channels: int
+) -> torch.Tensor:
     flattened = [
-        pred.permute(0, 2, 3, 1).reshape(num_imgs, -1, channels)
-        for pred in preds
+        pred.permute(0, 2, 3, 1).reshape(num_imgs, -1, channels) for pred in preds
     ]
     return torch.cat(flattened, dim=1)
 
@@ -320,4 +341,3 @@ def _smooth_l1_loss(
     if avg_factor <= 0:
         return pred.sum() * 0
     return weighted_loss.sum() / (avg_factor + torch.finfo(torch.float32).eps)
-

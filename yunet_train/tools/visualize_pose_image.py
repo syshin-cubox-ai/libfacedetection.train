@@ -9,7 +9,11 @@ import numpy as np
 import torch
 
 from yunet_train.engine import load_checkpoint
-from yunet_train.tasks.pose import PoseSample, build_pose_eval_transforms, build_yunet_pose
+from yunet_train.tasks.pose import (
+    PoseSample,
+    build_pose_eval_transforms,
+    build_yunet_pose,
+)
 from yunet_train.tasks.pose.coco_eval import _rescale_result_to_original
 from yunet_train.tasks.pose.postprocess import YuNetPosePostprocessor
 from yunet_train.tasks.pose.visualize import render_pose_sample
@@ -31,7 +35,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--variant", choices=("yunet_n", "yunet_s"), default=None)
     parser.add_argument("--image-size", type=int, default=640)
-    parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument(
+        "--device", default="cuda" if torch.cuda.is_available() else "cpu"
+    )
     parser.add_argument("--score-threshold", type=float, default=0.25)
     parser.add_argument("--nms-threshold", type=float, default=0.45)
     parser.add_argument("--max-detections", type=int, default=20)

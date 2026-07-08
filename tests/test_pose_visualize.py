@@ -9,7 +9,11 @@ from shutil import rmtree
 import numpy as np
 import pytest
 
-from yunet_train.tasks.pose import PoseSample, pose_sample_annotation_text, render_pose_sample
+from yunet_train.tasks.pose import (
+    PoseSample,
+    pose_sample_annotation_text,
+    render_pose_sample,
+)
 from yunet_train.tools.visualize_pose_dataset import visualize_pose_dataset
 
 
@@ -51,7 +55,9 @@ def test_pose_sample_annotation_text_contains_visibility_summary() -> None:
     assert "visible_keypoints=17" in text
 
 
-@pytest.mark.skipif(not _coco8_pose_root().exists(), reason="data/coco8-pose is not available")
+@pytest.mark.skipif(
+    not _coco8_pose_root().exists(), reason="data/coco8-pose is not available"
+)
 def test_visualize_pose_dataset_writes_debug_files() -> None:
     out_dir = Path(__file__).resolve().parent / "output" / "pose_visualize_smoke"
     if out_dir.exists():

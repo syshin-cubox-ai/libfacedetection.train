@@ -15,13 +15,17 @@ from .types import PoseBatch
 class PoseCriterion(Protocol):
     def __call__(
         self,
-        preds: tuple[list[torch.Tensor], list[torch.Tensor], list[torch.Tensor], list[torch.Tensor]],
+        preds: tuple[
+            list[torch.Tensor],
+            list[torch.Tensor],
+            list[torch.Tensor],
+            list[torch.Tensor],
+        ],
         *,
         boxes: list[torch.Tensor],
         labels: list[torch.Tensor],
         keypoints: list[torch.Tensor],
-    ) -> dict[str, torch.Tensor]:
-        ...
+    ) -> dict[str, torch.Tensor]: ...
 
 
 LOSS_NAMES = ("loss_cls", "loss_bbox", "loss_obj", "loss_kpt", "loss_kpt_vis")
@@ -38,12 +42,16 @@ class PoseTrainStats:
     steps: int
 
 
-def move_pose_batch_to_device(batch: PoseBatch, device: torch.device | str) -> PoseBatch:
+def move_pose_batch_to_device(
+    batch: PoseBatch, device: torch.device | str
+) -> PoseBatch:
     return PoseBatch(
         images=batch.images.to(device, non_blocking=True),
         boxes=[boxes.to(device, non_blocking=True) for boxes in batch.boxes],
         labels=[labels.to(device, non_blocking=True) for labels in batch.labels],
-        keypoints=[keypoints.to(device, non_blocking=True) for keypoints in batch.keypoints],
+        keypoints=[
+            keypoints.to(device, non_blocking=True) for keypoints in batch.keypoints
+        ],
         metas=batch.metas,
     )
 
@@ -97,7 +105,9 @@ def evaluate_pose_loss(
     return _stats_from_totals(totals, steps)
 
 
-def _compute_losses(model: torch.nn.Module, criterion: PoseCriterion, batch: PoseBatch) -> dict[str, torch.Tensor]:
+def _compute_losses(
+    model: torch.nn.Module, criterion: PoseCriterion, batch: PoseBatch
+) -> dict[str, torch.Tensor]:
     return criterion(
         model(batch.images),
         boxes=batch.boxes,
@@ -118,7 +128,9 @@ def _stats_from_totals(totals: dict[str, float], steps: int) -> PoseTrainStats:
     )
 
 
-def _format_step(epoch: int, steps: int, total_steps: int, totals: dict[str, float]) -> str:
+def _format_step(
+    epoch: int, steps: int, total_steps: int, totals: dict[str, float]
+) -> str:
     return (
         f"train epoch={epoch} "
         f"step={steps}/{total_steps} "

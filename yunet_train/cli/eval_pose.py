@@ -23,14 +23,18 @@ from yunet_train.engine import load_checkpoint
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Evaluate a YuNet pose checkpoint on YOLO-pose validation data.")
+    parser = argparse.ArgumentParser(
+        description="Evaluate a YuNet pose checkpoint on YOLO-pose validation data."
+    )
     parser.add_argument("checkpoint", type=Path)
     parser.add_argument("--data-root", type=Path, default=COCO8_POSE_ROOT)
     parser.add_argument("--variant", choices=("yunet_n", "yunet_s"), default=None)
     parser.add_argument("--image-size", type=int, default=640)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--workers", type=int, default=0)
-    parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument(
+        "--device", default="cuda" if torch.cuda.is_available() else "cpu"
+    )
     parser.add_argument("--limit-samples", type=int, default=None)
     parser.add_argument("--out-dir", type=Path, default=Path("work_dirs/pose_eval"))
     parser.add_argument("--save-visualizations", type=int, default=0)
@@ -74,7 +78,9 @@ def eval_pose(args: argparse.Namespace):
         pin_memory=device.type == "cuda",
     )
     criterion = YuNetPoseCriterion(strides=(8, 16, 32), kpt_shape=(17, 3))
-    stats = evaluate_pose_loss(model=model, criterion=criterion, data_loader=loader, device=device)
+    stats = evaluate_pose_loss(
+        model=model, criterion=criterion, data_loader=loader, device=device
+    )
     _write_metrics(args.out_dir / "pose_eval_metrics.csv", stats)
     if args.save_visualizations > 0:
         _save_visualizations(args, dataset, model, device)
@@ -82,7 +88,12 @@ def eval_pose(args: argparse.Namespace):
 
 
 @torch.no_grad()
-def _save_visualizations(args: argparse.Namespace, dataset: YOLOPoseDataset, model: torch.nn.Module, device: torch.device) -> None:
+def _save_visualizations(
+    args: argparse.Namespace,
+    dataset: YOLOPoseDataset,
+    model: torch.nn.Module,
+    device: torch.device,
+) -> None:
     postprocessor = YuNetPosePostprocessor(
         score_threshold=args.score_threshold,
         nms_threshold=args.nms_threshold,
@@ -92,13 +103,19 @@ def _save_visualizations(args: argparse.Namespace, dataset: YOLOPoseDataset, mod
     vis_dir.mkdir(parents=True, exist_ok=True)
     for idx in range(min(args.save_visualizations, len(dataset))):
         sample = dataset[idx]
-        image = sample.image.unsqueeze(0).to(device) if isinstance(sample.image, torch.Tensor) else None
+        image = (
+            sample.image.unsqueeze(0).to(device)
+            if isinstance(sample.image, torch.Tensor)
+            else None
+        )
         if image is None:
             raise TypeError("eval pose visualization expects tensor samples")
         result = postprocessor(model(image))[0]
         pred_sample = _prediction_sample(sample, result)
         rendered = render_pose_sample(pred_sample)
-        cv2.imwrite(str(vis_dir / f"{idx:04d}_{Path(sample.filename).stem}.jpg"), rendered)
+        cv2.imwrite(
+            str(vis_dir / f"{idx:04d}_{Path(sample.filename).stem}.jpg"), rendered
+        )
 
 
 def _prediction_sample(sample, result):
@@ -122,7 +139,15 @@ def _write_metrics(path: Path, stats) -> None:
     with path.open("w", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(
             file,
-            fieldnames=("loss", "loss_cls", "loss_bbox", "loss_obj", "loss_kpt", "loss_kpt_vis", "steps"),
+            fieldnames=(
+                "loss",
+                "loss_cls",
+                "loss_bbox",
+                "loss_obj",
+                "loss_kpt",
+                "loss_kpt_vis",
+                "steps",
+            ),
         )
         writer.writeheader()
         writer.writerow(

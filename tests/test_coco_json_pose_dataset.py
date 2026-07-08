@@ -20,13 +20,17 @@ def _keypoints_flat_xyv(x: float, y: float, v: float) -> list[float]:
 def test_coco_json_pose_dataset_loads_one_image(tmp_path: Path) -> None:
     image_dir = tmp_path / "images"
     image_dir.mkdir()
-    assert cv2.imwrite(str(image_dir / "1.jpg"), np.zeros((120, 160, 3), dtype=np.uint8))
+    assert cv2.imwrite(
+        str(image_dir / "1.jpg"), np.zeros((120, 160, 3), dtype=np.uint8)
+    )
 
     ann_path = tmp_path / "ann.json"
     ann_path.write_text(
         json.dumps(
             {
-                "images": [{"id": 1, "file_name": "1.jpg", "width": 160, "height": 120}],
+                "images": [
+                    {"id": 1, "file_name": "1.jpg", "width": 160, "height": 120}
+                ],
                 "annotations": [
                     {
                         "image_id": 1,

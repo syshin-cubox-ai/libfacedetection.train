@@ -66,7 +66,9 @@ TRAINING_ONLY_KEY_PREFIXES = (
 )
 
 
-def clean_inference_state_dict(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+def clean_inference_state_dict(
+    state_dict: dict[str, torch.Tensor],
+) -> dict[str, torch.Tensor]:
     cleaned = {}
     for key, value in state_dict.items():
         if key.startswith("module."):
@@ -75,4 +77,3 @@ def clean_inference_state_dict(state_dict: dict[str, torch.Tensor]) -> dict[str,
             continue
         cleaned[key] = value
     return cleaned
-

@@ -6,18 +6,31 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from yunet_train.tasks.pose import COCO17_FLIP_IDX, COCO8_POSE_ROOT, YOLOPoseDataset, build_pose_eval_transforms, build_pose_train_transforms
-from yunet_train.tasks.pose.visualize import pose_sample_annotation_text, render_pose_sample
+from yunet_train.tasks.pose import (
+    COCO17_FLIP_IDX,
+    COCO8_POSE_ROOT,
+    YOLOPoseDataset,
+    build_pose_eval_transforms,
+    build_pose_train_transforms,
+)
+from yunet_train.tasks.pose.visualize import (
+    pose_sample_annotation_text,
+    render_pose_sample,
+)
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Visualize YuNet pose training samples after augmentation.")
+    parser = argparse.ArgumentParser(
+        description="Visualize YuNet pose training samples after augmentation."
+    )
     parser.add_argument("--data-root", type=Path, default=COCO8_POSE_ROOT)
     parser.add_argument("--split", default="train", choices=("train", "val"))
     parser.add_argument("--image-size", type=int, default=640)
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--samples-per-epoch", type=int, default=1)
-    parser.add_argument("--out-dir", type=Path, default=Path("work_dirs/pose_augmentation_debug"))
+    parser.add_argument(
+        "--out-dir", type=Path, default=Path("work_dirs/pose_augmentation_debug")
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--no-transform", action="store_true")
     return parser.parse_args()
@@ -38,7 +51,9 @@ def visualize_pose_dataset(args: argparse.Namespace) -> None:
             if args.split == "train"
             else build_pose_eval_transforms(args.image_size)
         )
-    dataset = YOLOPoseDataset(args.data_root, split=args.split, transform=transform, kpt_shape=(17, 3))
+    dataset = YOLOPoseDataset(
+        args.data_root, split=args.split, transform=transform, kpt_shape=(17, 3)
+    )
     if len(dataset) == 0:
         raise ValueError(f"Dataset has no images: {args.data_root} split={args.split}")
 

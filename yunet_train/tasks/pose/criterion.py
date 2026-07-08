@@ -34,7 +34,9 @@ class YuNetPoseCriterion:
         loss_weights: YuNetPoseLossWeights | None = None,
     ):
         if kpt_shape[1] < 3:
-            raise ValueError("YuNetPoseCriterion currently expects keypoints with visibility, e.g. kpt_shape=(17, 3)")
+            raise ValueError(
+                "YuNetPoseCriterion currently expects keypoints with visibility, e.g. kpt_shape=(17, 3)"
+            )
         self.num_classes = num_classes
         self.kpt_shape = kpt_shape
         self.kpt_out_channels = kpt_shape[0] * kpt_shape[1]
@@ -44,7 +46,12 @@ class YuNetPoseCriterion:
 
     def __call__(
         self,
-        preds: tuple[list[torch.Tensor], list[torch.Tensor], list[torch.Tensor], list[torch.Tensor]],
+        preds: tuple[
+            list[torch.Tensor],
+            list[torch.Tensor],
+            list[torch.Tensor],
+            list[torch.Tensor],
+        ],
         *,
         boxes: list[torch.Tensor],
         labels: list[torch.Tensor],
@@ -68,7 +75,9 @@ class YuNetPoseCriterion:
 
         expanded_priors = flatten_priors.unsqueeze(0).repeat(num_imgs, 1, 1)
         flatten_bboxes = bbox_decode(expanded_priors, flatten_bbox_preds)
-        decoded_keypoints = pose_keypoints_decode(expanded_priors, flatten_kpt_preds, kpt_shape=self.kpt_shape)
+        decoded_keypoints = pose_keypoints_decode(
+            expanded_priors, flatten_kpt_preds, kpt_shape=self.kpt_shape
+        )
         raw_keypoints = flatten_kpt_preds.reshape(num_imgs, -1, *self.kpt_shape)
 
         targets = [
@@ -100,14 +109,18 @@ class YuNetPoseCriterion:
         raw_keypoints_all = raw_keypoints.reshape(-1, *self.kpt_shape)
 
         loss_obj = (
-            F.binary_cross_entropy_with_logits(flatten_objectness_all, obj_targets, reduction="sum")
+            F.binary_cross_entropy_with_logits(
+                flatten_objectness_all, obj_targets, reduction="sum"
+            )
             / num_total_samples
             * self.loss_weights.obj
         )
 
         if pos_masks.any():
             loss_cls = (
-                F.binary_cross_entropy_with_logits(flatten_cls_preds_all[pos_masks], cls_targets, reduction="sum")
+                F.binary_cross_entropy_with_logits(
+                    flatten_cls_preds_all[pos_masks], cls_targets, reduction="sum"
+                )
                 / num_total_samples
                 * self.loss_weights.cls
             )
@@ -117,11 +130,15 @@ class YuNetPoseCriterion:
                 * self.loss_weights.bbox
             )
             loss_kpt = (
-                oks_keypoint_loss(decoded_keypoints_all[pos_masks][..., :2], kpt_targets, area_targets)
+                oks_keypoint_loss(
+                    decoded_keypoints_all[pos_masks][..., :2], kpt_targets, area_targets
+                )
                 * self.loss_weights.kpt
             )
             loss_kpt_vis = (
-                keypoint_visibility_loss(raw_keypoints_all[pos_masks][..., 2], kpt_targets)
+                keypoint_visibility_loss(
+                    raw_keypoints_all[pos_masks][..., 2], kpt_targets
+                )
                 * self.loss_weights.kpt_vis
             )
         else:
@@ -160,7 +177,9 @@ class YuNetPoseCriterion:
         if gt_labels.numel() == 0:
             return self._empty_target(cls_preds, objectness, num_priors)
 
-        offset_priors = torch.cat([priors[:, :2] + priors[:, 2:] * 0.5, priors[:, 2:]], dim=-1)
+        offset_priors = torch.cat(
+            [priors[:, :2] + priors[:, 2:] * 0.5, priors[:, 2:]], dim=-1
+        )
         assign_result = self.assigner.assign(
             cls_preds.sigmoid() * objectness.unsqueeze(1).sigmoid(),
             offset_priors,
@@ -174,11 +193,15 @@ class YuNetPoseCriterion:
         pos_assigned_gt_inds = assign_result.gt_inds[pos_inds] - 1
         num_pos = pos_inds.numel()
         if num_pos == 0:
-            return self._empty_target(cls_preds, objectness, num_priors, pos_mask=pos_mask)
+            return self._empty_target(
+                cls_preds, objectness, num_priors, pos_mask=pos_mask
+            )
 
         pos_labels = gt_labels[pos_assigned_gt_inds]
         pos_ious = assign_result.max_overlaps[pos_inds]
-        cls_target = F.one_hot(pos_labels, self.num_classes).to(cls_preds.dtype) * pos_ious.unsqueeze(-1)
+        cls_target = F.one_hot(pos_labels, self.num_classes).to(
+            cls_preds.dtype
+        ) * pos_ious.unsqueeze(-1)
 
         obj_target = torch.zeros_like(objectness).unsqueeze(-1)
         obj_target[pos_inds] = 1
@@ -220,6 +243,10 @@ class YuNetPoseCriterion:
         }
 
 
-def _flatten_preds(preds: list[torch.Tensor], num_imgs: int, channels: int) -> torch.Tensor:
-    flattened = [pred.permute(0, 2, 3, 1).reshape(num_imgs, -1, channels) for pred in preds]
+def _flatten_preds(
+    preds: list[torch.Tensor], num_imgs: int, channels: int
+) -> torch.Tensor:
+    flattened = [
+        pred.permute(0, 2, 3, 1).reshape(num_imgs, -1, channels) for pred in preds
+    ]
     return torch.cat(flattened, dim=1)

@@ -10,7 +10,9 @@ from yunet_train.tasks.face import build_yunet, clean_inference_state_dict
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Export a lightweight YuNet checkpoint to ONNX.")
+    parser = argparse.ArgumentParser(
+        description="Export a lightweight YuNet checkpoint to ONNX."
+    )
     parser.add_argument("checkpoint", type=Path)
     parser.add_argument("--variant", choices=("yunet_n", "yunet_s"), default=None)
     parser.add_argument("--output-file", type=Path, default=None)
@@ -33,7 +35,10 @@ def export_onnx(args: argparse.Namespace) -> Path:
     return export_model_to_onnx(
         checkpoint_path=args.checkpoint,
         build_model=build_yunet,
-        output_file=args.output_file or _default_output_file(args.checkpoint, args.variant, input_shape, args.dynamic_export),
+        output_file=args.output_file
+        or _default_output_file(
+            args.checkpoint, args.variant, input_shape, args.dynamic_export
+        ),
         input_shape=input_shape,
         output_names=_output_names(),
         flatten_outputs=_flatten_export_outputs,
@@ -64,11 +69,19 @@ def _output_names() -> list[str]:
     return names
 
 
-def _flatten_export_outputs(model: torch.nn.Module, image: torch.Tensor) -> list[torch.Tensor]:
+def _flatten_export_outputs(
+    model: torch.nn.Module, image: torch.Tensor
+) -> list[torch.Tensor]:
     cls_scores, bbox_preds, objectnesses, kps_preds = model(image)
     batch_size = image.shape[0]
-    cls = [pred.permute(0, 2, 3, 1).reshape(batch_size, -1, 1).sigmoid() for pred in cls_scores]
-    obj = [pred.permute(0, 2, 3, 1).reshape(batch_size, -1, 1).sigmoid() for pred in objectnesses]
+    cls = [
+        pred.permute(0, 2, 3, 1).reshape(batch_size, -1, 1).sigmoid()
+        for pred in cls_scores
+    ]
+    obj = [
+        pred.permute(0, 2, 3, 1).reshape(batch_size, -1, 1).sigmoid()
+        for pred in objectnesses
+    ]
     bbox = [pred.permute(0, 2, 3, 1).reshape(batch_size, -1, 4) for pred in bbox_preds]
     kps = [pred.permute(0, 2, 3, 1).reshape(batch_size, -1, 10) for pred in kps_preds]
     return cls + obj + bbox + kps

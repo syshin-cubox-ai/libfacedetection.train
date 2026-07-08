@@ -22,16 +22,26 @@ class WiderFaceAP:
         return {"easy": self.easy, "medium": self.medium, "hard": self.hard}
 
 
-def wider_evaluation(predictions: PredictionDict, gt_dir: str | Path, iou_thresh: float = 0.5) -> WiderFaceAP:
+def wider_evaluation(
+    predictions: PredictionDict, gt_dir: str | Path, iou_thresh: float = 0.5
+) -> WiderFaceAP:
     predictions = norm_score(predictions)
-    facebox_list, event_list, file_list, hard_gt_list, medium_gt_list, easy_gt_list = get_gt_boxes(gt_dir)
+    facebox_list, event_list, file_list, hard_gt_list, medium_gt_list, easy_gt_list = (
+        get_gt_boxes(gt_dir)
+    )
     aps = []
     for gt_list in (easy_gt_list, medium_gt_list, hard_gt_list):
-        aps.append(_evaluate_setting(predictions, facebox_list, event_list, file_list, gt_list, iou_thresh))
+        aps.append(
+            _evaluate_setting(
+                predictions, facebox_list, event_list, file_list, gt_list, iou_thresh
+            )
+        )
     return WiderFaceAP(easy=aps[0], medium=aps[1], hard=aps[2])
 
 
-def detections_to_widerface(result: DetectionResult, meta: dict[str, Any]) -> np.ndarray:
+def detections_to_widerface(
+    result: DetectionResult, meta: dict[str, Any]
+) -> np.ndarray:
     boxes = result.boxes.detach().cpu().float().numpy().copy()
     scores = result.scores.detach().cpu().float().numpy().reshape(-1, 1)
     if boxes.size == 0:
@@ -51,14 +61,20 @@ def detections_to_widerface(result: DetectionResult, meta: dict[str, Any]) -> np
     return np.concatenate((xywh, scores), axis=1).astype(np.float32)
 
 
-def add_prediction(predictions: PredictionDict, filename: str, boxes: np.ndarray) -> None:
+def add_prediction(
+    predictions: PredictionDict, filename: str, boxes: np.ndarray
+) -> None:
     image_path = Path(filename)
     event_name = image_path.parent.as_posix()
     image_name = image_path.stem
-    predictions.setdefault(event_name, {})[image_name] = boxes.astype(np.float32, copy=False)
+    predictions.setdefault(event_name, {})[image_name] = boxes.astype(
+        np.float32, copy=False
+    )
 
 
-def write_widerface_predictions(predictions: PredictionDict, output_dir: str | Path) -> None:
+def write_widerface_predictions(
+    predictions: PredictionDict, output_dir: str | Path
+) -> None:
     root = Path(output_dir)
     root.mkdir(parents=True, exist_ok=True)
     for event_name, event_predictions in predictions.items():
@@ -115,7 +131,9 @@ def norm_score(predictions: PredictionDict) -> PredictionDict:
     return predictions
 
 
-def image_eval(pred: np.ndarray, gt: np.ndarray, ignore: np.ndarray, iou_thresh: float) -> tuple[np.ndarray, np.ndarray]:
+def image_eval(
+    pred: np.ndarray, gt: np.ndarray, ignore: np.ndarray, iou_thresh: float
+) -> tuple[np.ndarray, np.ndarray]:
     pred = pred.copy()
     gt = gt.copy()
     pred_recall = np.zeros(pred.shape[0])
@@ -158,7 +176,12 @@ def bbox_overlap(boxes: np.ndarray, query_box: np.ndarray) -> np.ndarray:
     return overlaps
 
 
-def img_pr_info(thresh_num: int, pred_info: np.ndarray, proposal_list: np.ndarray, pred_recall: np.ndarray) -> np.ndarray:
+def img_pr_info(
+    thresh_num: int,
+    pred_info: np.ndarray,
+    proposal_list: np.ndarray,
+    pred_recall: np.ndarray,
+) -> np.ndarray:
     pr_info = np.zeros((thresh_num, 2), dtype=np.float64)
     for threshold_idx in range(thresh_num):
         thresh = 1 - (threshold_idx + 1) / thresh_num
@@ -172,9 +195,16 @@ def img_pr_info(thresh_num: int, pred_info: np.ndarray, proposal_list: np.ndarra
     return pr_info
 
 
-def dataset_pr_info(thresh_num: int, pr_curve: np.ndarray, count_face: int) -> np.ndarray:
+def dataset_pr_info(
+    thresh_num: int, pr_curve: np.ndarray, count_face: int
+) -> np.ndarray:
     output = np.zeros((thresh_num, 2), dtype=np.float64)
-    output[:, 0] = np.divide(pr_curve[:, 1], pr_curve[:, 0], out=np.zeros(thresh_num), where=pr_curve[:, 0] > 0)
+    output[:, 0] = np.divide(
+        pr_curve[:, 1],
+        pr_curve[:, 0],
+        out=np.zeros(thresh_num),
+        where=pr_curve[:, 0] > 0,
+    )
     if count_face > 0:
         output[:, 1] = pr_curve[:, 1] / count_face
     return output
@@ -186,7 +216,11 @@ def voc_ap(recalls: np.ndarray, precisions: np.ndarray) -> float:
     for idx in range(mpre.size - 1, 0, -1):
         mpre[idx - 1] = np.maximum(mpre[idx - 1], mpre[idx])
     change_indices = np.where(mrec[1:] != mrec[:-1])[0]
-    return float(np.sum((mrec[change_indices + 1] - mrec[change_indices]) * mpre[change_indices + 1]))
+    return float(
+        np.sum(
+            (mrec[change_indices + 1] - mrec[change_indices]) * mpre[change_indices + 1]
+        )
+    )
 
 
 def _evaluate_setting(
@@ -210,9 +244,13 @@ def _evaluate_setting(
         gt_bbx_list = facebox_list[event_idx][0]
         for image_idx in range(len(image_list)):
             image_name = str(image_list[image_idx][0][0])
-            pred_info = event_predictions.get(image_name, np.zeros((0, 5), dtype=np.float32))
+            pred_info = event_predictions.get(
+                image_name, np.zeros((0, 5), dtype=np.float32)
+            )
             gt_boxes = gt_bbx_list[image_idx][0].astype(np.float32)
-            keep_index = np.asarray(sub_gt_list[image_idx][0], dtype=np.int64).reshape(-1)
+            keep_index = np.asarray(sub_gt_list[image_idx][0], dtype=np.int64).reshape(
+                -1
+            )
             count_face += len(keep_index)
             if len(gt_boxes) == 0 or len(pred_info) == 0:
                 continue
@@ -220,7 +258,9 @@ def _evaluate_setting(
             ignore = np.zeros(gt_boxes.shape[0], dtype=np.int64)
             if len(keep_index) != 0:
                 ignore[keep_index - 1] = 1
-            pred_recall, proposal_list = image_eval(pred_info, gt_boxes, ignore, iou_thresh)
+            pred_recall, proposal_list = image_eval(
+                pred_info, gt_boxes, ignore, iou_thresh
+            )
             pr_curve += img_pr_info(thresh_num, pred_info, proposal_list, pred_recall)
 
     pr_curve = dataset_pr_info(thresh_num, pr_curve, count_face)

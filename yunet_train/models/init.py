@@ -14,4 +14,3 @@ def init_yunet_weights(module: nn.Module) -> None:
         elif isinstance(layer, nn.BatchNorm2d):
             layer.weight.data.fill_(1)
             layer.bias.data.zero_()
-

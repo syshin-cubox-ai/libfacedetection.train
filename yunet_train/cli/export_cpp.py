@@ -11,10 +11,16 @@ from yunet_train.tasks.face import build_yunet, clean_inference_state_dict
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Export a YuNet checkpoint to libfacedetection C++ data.")
+    parser = argparse.ArgumentParser(
+        description="Export a YuNet checkpoint to libfacedetection C++ data."
+    )
     parser.add_argument("checkpoint", type=Path)
     parser.add_argument("--variant", choices=("yunet_n", "yunet_s"), default=None)
-    parser.add_argument("--output-file", type=Path, default=Path("work_dirs/export/facedetectcnn-data.cpp"))
+    parser.add_argument(
+        "--output-file",
+        type=Path,
+        default=Path("work_dirs/export/facedetectcnn-data.cpp"),
+    )
     parser.add_argument("--precision", default=".3g")
     return parser.parse_args()
 
@@ -35,7 +41,9 @@ def export_cpp(args: argparse.Namespace) -> Path:
 
     output_file = args.output_file
     output_file.parent.mkdir(parents=True, exist_ok=True)
-    output_file.write_text(CppConvertor(model, precision=args.precision).data, encoding="utf-8")
+    output_file.write_text(
+        CppConvertor(model, precision=args.precision).data, encoding="utf-8"
+    )
     return output_file
 
 
@@ -74,11 +82,17 @@ class CppConvertor:
             groups=conv.groups,
             bias=True,
         )
-        conv_bias = conv.bias if conv.bias is not None else torch.zeros_like(bn.running_mean)
+        conv_bias = (
+            conv.bias if conv.bias is not None else torch.zeros_like(bn.running_mean)
+        )
         scales = bn.weight / torch.sqrt(bn.running_var + bn.eps)
-        conv_result.bias.data = (conv_bias.data - bn.running_mean) * scales + bn.bias.data
+        conv_result.bias.data = (
+            conv_bias.data - bn.running_mean
+        ) * scales + bn.bias.data
         for channel in range(conv.out_channels):
-            conv_result.weight.data[channel, ...] = conv.weight.data[channel, ...] * scales[channel]
+            conv_result.weight.data[channel, ...] = (
+                conv.weight.data[channel, ...] * scales[channel]
+            )
         return conv_result
 
     def convert_param2string(
@@ -100,7 +114,14 @@ class CppConvertor:
                     weight[idx, (offset % 9) * 3 + offset // 9] = reordered[idx, offset]
             weight = np.hstack((weight, np.zeros((out_channels, 5)))).reshape(-1)
         elif is_depthwise:
-            weight = conv.weight.detach().cpu().numpy().reshape((-1, 9)).transpose().reshape(-1)
+            weight = (
+                conv.weight.detach()
+                .cpu()
+                .numpy()
+                .reshape((-1, 9))
+                .transpose()
+                .reshape(-1)
+            )
         else:
             weight = conv.weight.detach().cpu().numpy().reshape(-1)
 
@@ -111,22 +132,30 @@ class CppConvertor:
             if is_first_3x3x3
             else f"{out_channels}*{in_channels}*{width}*{height}"
         )
-        in_channels_for_struct = 32 if is_first_3x3x3 else out_channels if is_depthwise else in_channels
+        in_channels_for_struct = (
+            32 if is_first_3x3x3 else out_channels if is_depthwise else in_channels
+        )
         return {
             "type": "float",
             "weight_name": f"{name}_weight",
             "weight_size": weight_size,
-            "weight": ",".join(data2str_as_precision(value, self.precision) for value in weight),
+            "weight": ",".join(
+                data2str_as_precision(value, self.precision) for value in weight
+            ),
             "bias_name": f"{name}_bias",
             "bias_size": str(out_channels),
-            "bias": ",".join(data2str_as_precision(value, self.precision) for value in bias),
+            "bias": ",".join(
+                data2str_as_precision(value, self.precision) for value in bias
+            ),
             "with_bn": with_bn_relu,
             "is_dw": is_depthwise,
             "in_channels": in_channels_for_struct,
             "out_channels": out_channels,
         }
 
-    def convert_module2string(self, conv: nn.Module, name: str, module_type: str) -> None:
+    def convert_module2string(
+        self, conv: nn.Module, name: str, module_type: str
+    ) -> None:
         if module_type == "Conv_head":
             self.cppdata.append(
                 self.convert_param2string(
@@ -149,7 +178,11 @@ class CppConvertor:
                     )
                 )
             else:
-                self.cppdata.append(self.convert_param2string(conv.conv2, name + "_dw", is_depthwise=True))
+                self.cppdata.append(
+                    self.convert_param2string(
+                        conv.conv2, name + "_dw", is_depthwise=True
+                    )
+                )
         elif module_type == "Conv4layerBlock":
             self.convert_module2string(conv.conv1, name + "_dp1", "ConvDPUnit")
             self.convert_module2string(conv.conv2, name + "_dp2", "ConvDPUnit")
@@ -161,7 +194,9 @@ class CppConvertor:
             module_name = f"{last_name}__{name}"
             module_type = module.__class__.__name__
             if module_type in self.support_modules:
-                self.module_list.append({"type": module_type, "name": module_name[2:], "module": module})
+                self.module_list.append(
+                    {"type": module_type, "name": module_name[2:], "module": module}
+                )
             else:
                 self.loop_search_modules(module, module_name)
 

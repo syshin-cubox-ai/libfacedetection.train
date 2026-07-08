@@ -47,9 +47,13 @@ class YuNetPostprocessor:
             with_stride=True,
         )
         flatten_priors = torch.cat(priors, dim=0)
-        flatten_cls_scores = _flatten_preds(cls_scores, num_imgs, cls_scores[0].shape[1]).sigmoid()
+        flatten_cls_scores = _flatten_preds(
+            cls_scores, num_imgs, cls_scores[0].shape[1]
+        ).sigmoid()
         flatten_bbox_preds = _flatten_preds(bbox_preds, num_imgs, 4)
-        flatten_objectness = _flatten_preds(objectnesses, num_imgs, 1).squeeze(-1).sigmoid()
+        flatten_objectness = (
+            _flatten_preds(objectnesses, num_imgs, 1).squeeze(-1).sigmoid()
+        )
         flatten_kps_preds = _flatten_preds(kps_preds, num_imgs, kps_preds[0].shape[1])
 
         expanded_priors = flatten_priors.unsqueeze(0).repeat(num_imgs, 1, 1)
@@ -81,9 +85,10 @@ class YuNetPostprocessor:
         return results
 
 
-def _flatten_preds(preds: list[torch.Tensor], num_imgs: int, channels: int) -> torch.Tensor:
+def _flatten_preds(
+    preds: list[torch.Tensor], num_imgs: int, channels: int
+) -> torch.Tensor:
     flattened = [
-        pred.permute(0, 2, 3, 1).reshape(num_imgs, -1, channels)
-        for pred in preds
+        pred.permute(0, 2, 3, 1).reshape(num_imgs, -1, channels) for pred in preds
     ]
     return torch.cat(flattened, dim=1)
