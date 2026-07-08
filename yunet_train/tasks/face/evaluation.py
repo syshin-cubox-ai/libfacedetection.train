@@ -18,8 +18,17 @@ class WiderFaceAP:
     medium: float
     hard: float
 
+    @property
+    def mean(self) -> float:
+        return (self.easy + self.medium + self.hard) / 3
+
     def as_dict(self) -> dict[str, float]:
-        return {"easy": self.easy, "medium": self.medium, "hard": self.hard}
+        return {
+            "easy": self.easy,
+            "medium": self.medium,
+            "hard": self.hard,
+            "mean": self.mean,
+        }
 
 
 def wider_evaluation(

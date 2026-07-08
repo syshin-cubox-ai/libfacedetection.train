@@ -8,16 +8,16 @@ from time import perf_counter
 
 import cv2
 import numpy as np
-import onnx
 import onnxruntime
 from tqdm import tqdm
 
+import onnx
 from yunet_train.tasks.face import (
-    PredictionDict,
-    WIDERFaceDataset,
     WIDER_VAL_ANN_FILE,
     WIDER_VAL_GT_DIR,
     WIDER_VAL_IMAGE_DIR,
+    PredictionDict,
+    WIDERFaceDataset,
     add_prediction,
     wider_evaluation,
     write_widerface_predictions,
@@ -127,7 +127,8 @@ def main() -> None:
             save_preds=args.save_preds,
         )
         print(
-            f"WIDERFace AP easy={aps.easy:.6f} medium={aps.medium:.6f} hard={aps.hard:.6f}"
+            f"WIDERFace AP easy={aps.easy:.6f} medium={aps.medium:.6f} "
+            f"hard={aps.hard:.6f} mean={aps.mean:.6f}"
         )
         return
 
@@ -204,7 +205,7 @@ def evaluate_onnx_detector(
     aps = wider_evaluation(predictions, gt_dir, iou_thresh=iou_thresh)
     print(f"Computed WIDER Face AP in {perf_counter() - eval_start:.2f}s", flush=True)
     (output_dir / "aps.txt").write_text(
-        f"{aps.easy:.6f},{aps.medium:.6f},{aps.hard:.6f}\n",
+        f"{aps.easy:.6f},{aps.medium:.6f},{aps.hard:.6f},{aps.mean:.6f}\n",
         encoding="utf-8",
     )
 

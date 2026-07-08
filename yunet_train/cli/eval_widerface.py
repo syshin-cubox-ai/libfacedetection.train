@@ -56,7 +56,8 @@ def main() -> None:
     args = parse_args()
     aps = run_evaluation(args)
     print(
-        f"WIDERFace AP easy={aps.easy:.6f} medium={aps.medium:.6f} hard={aps.hard:.6f}"
+        f"WIDERFace AP easy={aps.easy:.6f} medium={aps.medium:.6f} "
+        f"hard={aps.hard:.6f} mean={aps.mean:.6f}"
     )
 
 
@@ -114,7 +115,7 @@ def run_evaluation(args: argparse.Namespace):
     print(f"Computed WIDER Face AP in {perf_counter() - eval_start:.2f}s", flush=True)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     (args.output_dir / "aps.txt").write_text(
-        f"{aps.easy:.6f},{aps.medium:.6f},{aps.hard:.6f}\n",
+        f"{aps.easy:.6f},{aps.medium:.6f},{aps.hard:.6f},{aps.mean:.6f}\n",
         encoding="utf-8",
     )
     return aps
