@@ -16,8 +16,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch", type=int, default=1)
     parser.add_argument("--dynamic", action="store_true")
     parser.add_argument("--half", action="store_true")
-    parser.add_argument("--opset", type=int, default=None)
-    parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument("--opset", type=int, default=18)
+    parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--no-verify", dest="verify", action="store_false")
     return parser.parse_args()
 
@@ -47,7 +47,7 @@ def _flatten_export_outputs(
     return cls + obj + bbox + kps
 
 
-def main():
+def main() -> None:
     args = parse_args()
     output_path = export_model_to_onnx(
         checkpoint_path=args.checkpoint,

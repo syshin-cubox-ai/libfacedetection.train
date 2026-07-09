@@ -4,20 +4,12 @@ from typing import Callable
 
 import numpy as np
 import onnx
+import onnxruntime
 import onnxslim
 import torch
 from onnxruntime.transformers import float16
 
 from yunet_train.engine.checkpoint import load_checkpoint
-
-
-def best_onnx_opset(cuda: bool = False) -> int:
-    """Return max ONNX opset for this torch version with ONNX fallback."""
-    opset = torch.onnx.utils._constants.ONNX_MAX_OPSET - 1  # second-latest for safety
-    opset = min(opset, 20)  # legacy TorchScript exporter caps at opset 20 in torch 2.9+
-    if cuda:
-        opset -= 2  # fix CUDA ONNXRuntime NMS squeeze op errors
-    return min(opset, onnx.defs.onnx_opset_version())
 
 
 def export_model_to_onnx(
@@ -30,7 +22,7 @@ def export_model_to_onnx(
     output_names: list[str],
     flatten_outputs: Callable[[torch.nn.Module, torch.Tensor], list[torch.Tensor]],
     dynamic: bool,
-    opset: int | None,
+    opset: int,
     device: torch.device | str,
     verify: bool,
     half: bool = False,
@@ -52,11 +44,11 @@ def export_model_to_onnx(
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
     example_input = torch.zeros(input_shape, dtype=torch.float32, device=device)
-    for _ in range(2):  # dry runs
-        model(example_input)
-
-    opset = opset or best_onnx_opset(cuda=device.type == "cuda")
     dynamic_axes = _dynamic_axes(output_names) if dynamic else None
+
+    # dry runs
+    for _ in range(2):
+        model(example_input)
 
     torch.onnx.export(
         model,
@@ -98,6 +90,7 @@ def export_model_to_onnx(
         verify_onnx(
             model, verify_input, output_file, flatten_outputs, rtol=rtol, atol=atol
         )
+        print("The outputs are all close.")
     return output_file
 
 
@@ -109,15 +102,13 @@ def verify_onnx(
     rtol: float,
     atol: float,
 ) -> None:
-    import onnxruntime
-
     with torch.no_grad():
         torch_outputs = [
             output.detach().cpu().numpy()
             for output in flatten_outputs(model, example_input)
         ]
     session = onnxruntime.InferenceSession(
-        str(output_file), providers=["CPUExecutionProvider"]
+        output_file, providers=["CPUExecutionProvider"]
     )
     onnx_outputs = session.run(
         None, {session.get_inputs()[0].name: example_input.detach().cpu().numpy()}
@@ -126,14 +117,8 @@ def verify_onnx(
         raise AssertionError(
             f"ONNX output count mismatch: torch={len(torch_outputs)} onnx={len(onnx_outputs)}"
         )
-    for idx, (torch_output, onnx_output) in enumerate(zip(torch_outputs, onnx_outputs)):
-        np.testing.assert_allclose(
-            onnx_output,
-            torch_output,
-            rtol=rtol,
-            atol=atol,
-        )
-    print("The numerical values are close between PyTorch and ONNX")
+    for torch_output, onnx_output in zip(torch_outputs, onnx_outputs):
+        np.testing.assert_allclose(torch_output, onnx_output, rtol, atol)
 
 
 def parse_input_shape(shape: list[int], batch: int = 1) -> tuple[int, int, int, int]:
