@@ -9,9 +9,9 @@ from .onnx_export import (
     export_model_to_onnx,
     verify_onnx,
 )
-from .optim import MuSGD, build_musgd_param_groups
+from .optim import MuSGD, build_musgd_param_groups, build_sgd_param_groups
 from .priors import MlvlPointGenerator
-from .scheduler import LinearWarmupMultiStepLR
+from .scheduler import LinearWarmupMultiStepLR, WarmupMultiStepLR
 
 __all__ = [
     "AssignResult",
@@ -26,9 +26,11 @@ __all__ = [
     "nms",
     "MlvlPointGenerator",
     "LinearWarmupMultiStepLR",
+    "WarmupMultiStepLR",
     "ModelEMA",
     "MuSGD",
     "build_musgd_param_groups",
+    "build_sgd_param_groups",
     "load_checkpoint",
     "load_model_weights_only",
     "save_checkpoint",

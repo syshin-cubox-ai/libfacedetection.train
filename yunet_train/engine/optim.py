@@ -136,9 +136,23 @@ def build_musgd_param_groups(
     weight_decay: float,
     nesterov: bool = True,
 ) -> list[dict[str, Any]]:
-    """Split params like YOLO26: >=2D weights get Muon, 1D params get plain SGD without decay."""
-    muon_params = [p for p in model.parameters() if p.requires_grad and p.ndim >= 2]
-    sgd_params = [p for p in model.parameters() if p.requires_grad and p.ndim < 2]
+    """Split params like YOLO26: >=2D weights get Muon, 1D params get plain SGD without decay.
+
+    Biases go to their own SGD group tagged ``param_group="bias"`` so the LR
+    scheduler can apply the Ultralytics-style bias warmup.
+    """
+    muon_params = []
+    norm_params = []
+    bias_params = []
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
+        if param.ndim >= 2:
+            muon_params.append(param)
+        elif name.endswith(".bias"):
+            bias_params.append(param)
+        else:
+            norm_params.append(param)
     groups: list[dict[str, Any]] = []
     if muon_params:
         groups.append(
@@ -149,17 +163,73 @@ def build_musgd_param_groups(
                 "weight_decay": weight_decay,
                 "nesterov": nesterov,
                 "use_muon": True,
+                "param_group": "weights",
             }
         )
-    if sgd_params:
+    if norm_params:
         groups.append(
             {
-                "params": sgd_params,
+                "params": norm_params,
                 "lr": lr,
                 "momentum": momentum,
                 "weight_decay": 0.0,
                 "nesterov": nesterov,
                 "use_muon": False,
+                "param_group": "norm",
+            }
+        )
+    if bias_params:
+        groups.append(
+            {
+                "params": bias_params,
+                "lr": lr,
+                "momentum": momentum,
+                "weight_decay": 0.0,
+                "nesterov": nesterov,
+                "use_muon": False,
+                "param_group": "bias",
+            }
+        )
+    return groups
+
+
+def build_sgd_param_groups(
+    model: torch.nn.Module,
+    *,
+    lr: float,
+    momentum: float,
+    weight_decay: float,
+) -> list[dict[str, Any]]:
+    """Split params into weights vs biases so bias warmup can target its own group.
+
+    Weight decay is applied uniformly to both groups (unchanged from the
+    previous single-group SGD behavior); only the ``param_group`` tag differs.
+    """
+    weight_params = []
+    bias_params = []
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
+        (bias_params if name.endswith(".bias") else weight_params).append(param)
+    groups: list[dict[str, Any]] = []
+    if weight_params:
+        groups.append(
+            {
+                "params": weight_params,
+                "lr": lr,
+                "momentum": momentum,
+                "weight_decay": weight_decay,
+                "param_group": "weights",
+            }
+        )
+    if bias_params:
+        groups.append(
+            {
+                "params": bias_params,
+                "lr": lr,
+                "momentum": momentum,
+                "weight_decay": weight_decay,
+                "param_group": "bias",
             }
         )
     return groups
