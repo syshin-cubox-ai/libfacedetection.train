@@ -1,3 +1,4 @@
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
@@ -49,7 +50,19 @@ def export_model_to_onnx(
     # dry runs
     for _ in range(2):
         model(example_input)
+    with torch.no_grad():
+        output_shapes = tuple(
+            tuple(output.shape) for output in flatten_outputs(model, example_input)
+        )
 
+    t_start = time.time()
+    print(
+        f"\nPyTorch: starting from '{checkpoint_path}' with input shape {tuple(input_shape)} BCHW and "
+        f"output shape(s) {output_shapes} ({_file_size(checkpoint_path):.1f} MB)"
+    )
+
+    t_onnx = time.time()
+    print(f"\nONNX: starting export with onnx {onnx.__version__} opset {opset}...")
     torch.onnx.export(
         model,
         (example_input,),
@@ -64,25 +77,37 @@ def export_model_to_onnx(
     )
 
     model_onnx = onnx.load(str(output_file))
-    model_onnx = onnxslim.slim(model_onnx)
+
+    try:
+        print(f"ONNX: slimming with onnxslim {onnxslim.__version__}...")
+        model_onnx = onnxslim.slim(model_onnx)
+    except Exception as e:
+        print(f"WARNING: ONNX: simplifier failure: {e}")
 
     for key, value in _metadata(model, resolved_variant, input_shape, dynamic).items():
         meta = model_onnx.metadata_props.add()
         meta.key, meta.value = key, str(value)
 
     if getattr(model_onnx, "ir_version", 0) > 10:
-        # limit IR version to 10 for ONNXRuntime compatibility
+        print(
+            f"ONNX: limiting IR version {model_onnx.ir_version} to 10 for ONNXRuntime compatibility..."
+        )
         model_onnx.ir_version = 10
 
     if half:
         try:
+            print("ONNX: converting to FP16...")
             model_onnx = float16.convert_float_to_float16(
                 model_onnx, keep_io_types=True
             )
         except Exception as e:
-            print(f"WARNING: FP16 conversion failure: {e}")
+            print(f"WARNING: ONNX: FP16 conversion failure: {e}")
 
     onnx.save(model_onnx, str(output_file))
+    print(
+        f"ONNX: export success ✅ {time.time() - t_onnx:.1f}s, "
+        f"saved as '{output_file}' ({_file_size(output_file):.1f} MB)"
+    )
 
     if verify:
         verify_input = torch.randn(input_shape, dtype=torch.float32, device=device)
@@ -91,6 +116,12 @@ def export_model_to_onnx(
             model, verify_input, output_file, flatten_outputs, rtol=rtol, atol=atol
         )
         print("The outputs are all close.")
+
+    print(
+        f"\nExport complete ({time.time() - t_start:.1f}s)"
+        f"\nResults saved to {output_file.parent.resolve()}"
+        f"\nVisualize:       https://netron.app"
+    )
     return output_file
 
 
@@ -119,6 +150,11 @@ def verify_onnx(
         )
     for torch_output, onnx_output in zip(torch_outputs, onnx_outputs):
         np.testing.assert_allclose(torch_output, onnx_output, rtol, atol)
+
+
+def _file_size(path: Path) -> float:
+    """Return the size of a file in mebibytes (MiB)."""
+    return path.stat().st_size / (1 << 20)
 
 
 def parse_input_shape(shape: list[int], batch: int = 1) -> tuple[int, int, int, int]:

@@ -49,7 +49,7 @@ def _flatten_export_outputs(
 
 def main() -> None:
     args = parse_args()
-    output_path = export_model_to_onnx(
+    export_model_to_onnx(
         checkpoint_path=args.checkpoint,
         variant=args.variant,
         build_model=build_yunet,
@@ -64,7 +64,6 @@ def main() -> None:
         half=args.half,
         clean_state_dict=clean_inference_state_dict,
     )
-    print(f"Successfully exported: {output_path}")
 
 
 if __name__ == "__main__":

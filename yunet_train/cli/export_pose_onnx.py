@@ -57,7 +57,7 @@ def _flatten_export_outputs(
 def main() -> None:
     args = parse_args()
     kpt_shape = tuple(args.kpt_shape)
-    output_path = export_model_to_onnx(
+    export_model_to_onnx(
         checkpoint_path=args.checkpoint,
         variant=args.variant,
         build_model=lambda variant: build_yunet_pose(variant, kpt_shape=kpt_shape),
@@ -73,7 +73,6 @@ def main() -> None:
         verify=args.verify,
         half=args.half,
     )
-    print(f"Successfully exported: {output_path}")
 
 
 if __name__ == "__main__":
