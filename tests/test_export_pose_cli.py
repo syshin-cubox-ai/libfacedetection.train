@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 from shutil import rmtree
 
 import onnx
 import torch
 
-from yunet_train.cli.export_pose_onnx import export_pose_onnx
+from yunet_train.cli.export_pose_onnx import _flatten_export_outputs, _output_names
+from yunet_train.engine.onnx_export import export_model_to_onnx
 from yunet_train.tasks.pose import build_yunet_pose
 
 
@@ -35,19 +35,22 @@ def test_export_pose_onnx_smoke() -> None:
     work_dir.mkdir(parents=True)
     checkpoint = _checkpoint(work_dir / "yunet_pose_n.pth")
     output_file = work_dir / "yunet_pose_n.onnx"
+    kpt_shape = (17, 3)
 
-    result = export_pose_onnx(
-        argparse.Namespace(
-            checkpoint=checkpoint,
-            variant="yunet_n",
-            output_file=output_file,
-            shape=[64, 64],
-            kpt_shape=[17, 3],
-            opset_version=11,
-            dynamic_export=False,
-            verify=True,
-            device="cpu",
-        )
+    result = export_model_to_onnx(
+        checkpoint_path=checkpoint,
+        variant="yunet_n",
+        build_model=lambda variant: build_yunet_pose(variant, kpt_shape=kpt_shape),
+        output_file=output_file,
+        input_shape=(1, 3, 64, 64),
+        output_names=_output_names(),
+        flatten_outputs=lambda model, image: _flatten_export_outputs(
+            model, image, kpt_shape
+        ),
+        dynamic=False,
+        opset_version=18,
+        device="cpu",
+        verify=True,
     )
 
     assert result == output_file

@@ -8,8 +8,9 @@ import onnx
 import torch
 
 from yunet_train.cli.export_cpp import export_cpp
-from yunet_train.cli.export_onnx import export_onnx
-from yunet_train.tasks.face import build_yunet
+from yunet_train.cli.export_onnx import _flatten_export_outputs, _output_names
+from yunet_train.engine.onnx_export import export_model_to_onnx
+from yunet_train.tasks.face import build_yunet, clean_inference_state_dict
 
 
 OUTPUT_ROOT = Path(__file__).resolve().parent / "output" / "export_cli"
@@ -37,17 +38,19 @@ def test_export_onnx_smoke() -> None:
     checkpoint = _checkpoint(work_dir / "yunet_s.pth")
     output_file = work_dir / "yunet_s.onnx"
 
-    result = export_onnx(
-        argparse.Namespace(
-            checkpoint=checkpoint,
-            variant="yunet_s",
-            output_file=output_file,
-            shape=[64, 64],
-            opset_version=11,
-            dynamic_export=False,
-            verify=True,
-            device="cpu",
-        )
+    result = export_model_to_onnx(
+        checkpoint_path=checkpoint,
+        variant="yunet_s",
+        build_model=build_yunet,
+        output_file=output_file,
+        input_shape=(1, 3, 64, 64),
+        output_names=_output_names(),
+        flatten_outputs=_flatten_export_outputs,
+        dynamic=False,
+        opset_version=18,
+        device="cpu",
+        verify=True,
+        clean_state_dict=clean_inference_state_dict,
     )
 
     assert result == output_file

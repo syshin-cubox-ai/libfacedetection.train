@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import argparse
 from pathlib import Path
 
@@ -10,56 +8,16 @@ from yunet_train.tasks.face import build_yunet, clean_inference_state_dict
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Export a lightweight YuNet checkpoint to ONNX."
-    )
+    parser = argparse.ArgumentParser()
     parser.add_argument("checkpoint", type=Path)
-    parser.add_argument("--variant", choices=("yunet_n", "yunet_s"), default=None)
-    parser.add_argument("--output-file", type=Path, default=None)
+    parser.add_argument("--variant", choices=("yunet_n", "yunet_s"), default="yunet_n")
+    parser.add_argument("--output-file", type=Path)
     parser.add_argument("--shape", type=int, nargs="+", default=[640, 640])
-    parser.add_argument("--opset-version", type=int, default=18)
-    parser.add_argument("--dynamic-export", action="store_true")
-    parser.add_argument("--verify", action="store_true")
-    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--dynamic", action="store_true")
+    parser.add_argument("--opset", type=int, default=18)
+    parser.add_argument("--device", type=str, default="cpu")
+    parser.add_argument("--no-verify", dest="verify", action="store_false")
     return parser.parse_args()
-
-
-def main() -> None:
-    args = parse_args()
-    output_file = export_onnx(args)
-    print(f"Successfully exported ONNX model: {output_file}")
-
-
-def export_onnx(args: argparse.Namespace) -> Path:
-    input_shape = parse_input_shape(args.shape)
-    return export_model_to_onnx(
-        checkpoint_path=args.checkpoint,
-        build_model=build_yunet,
-        output_file=args.output_file
-        or _default_output_file(
-            args.checkpoint, args.variant, input_shape, args.dynamic_export
-        ),
-        input_shape=input_shape,
-        output_names=_output_names(),
-        flatten_outputs=_flatten_export_outputs,
-        variant=args.variant,
-        device=args.device,
-        opset_version=args.opset_version,
-        dynamic_export=args.dynamic_export,
-        verify=args.verify,
-        clean_state_dict=clean_inference_state_dict,
-    )
-
-
-def _default_output_file(
-    checkpoint: Path,
-    variant: str | None,
-    input_shape: tuple[int, int, int, int],
-    dynamic_export: bool,
-) -> Path:
-    tag = "dynamic" if dynamic_export else f"{input_shape[-2]}_{input_shape[-1]}"
-    variant_tag = variant or "auto"
-    return Path("work_dirs") / "export" / f"{checkpoint.stem}_{variant_tag}_{tag}.onnx"
 
 
 def _output_names() -> list[str]:
@@ -85,6 +43,25 @@ def _flatten_export_outputs(
     bbox = [pred.permute(0, 2, 3, 1).reshape(batch_size, -1, 4) for pred in bbox_preds]
     kps = [pred.permute(0, 2, 3, 1).reshape(batch_size, -1, 10) for pred in kps_preds]
     return cls + obj + bbox + kps
+
+
+def main():
+    args = parse_args()
+    output_path = export_model_to_onnx(
+        checkpoint_path=args.checkpoint,
+        variant=args.variant,
+        build_model=build_yunet,
+        output_file=args.output_file or args.checkpoint.with_suffix(".onnx"),
+        input_shape=parse_input_shape(args.shape),
+        output_names=_output_names(),
+        flatten_outputs=_flatten_export_outputs,
+        dynamic=args.dynamic,
+        opset_version=args.opset,
+        device=args.device,
+        verify=args.verify,
+        clean_state_dict=clean_inference_state_dict,
+    )
+    print(f"Successfully exported: {output_path}")
 
 
 if __name__ == "__main__":

@@ -157,13 +157,15 @@ python -m yunet_train.cli.export_cpp work_dirs/yunet_n/best_loss.pth --variant y
 Export ONNX:
 
 ```shell
-python -m yunet_train.cli.export_onnx work_dirs/yunet_n/best_loss.pth --variant yunet_n --shape 640 640 --verify --output-file work_dirs/export/yunet_n_640_640.onnx
+python -m yunet_train.cli.export_onnx work_dirs/yunet_n/best_loss.pth --variant yunet_n --shape 640 640 --output-file work_dirs/export/yunet_n_640_640.onnx
 ```
+
+The exported model is simplified with [onnxslim](https://github.com/inisis/OnnxSlim) and numerically verified against PyTorch by default (use `--no-verify` to skip verification). If `--output-file` is omitted, the checkpoint path with its extension changed to `.onnx` is used.
 
 Export dynamic-shape ONNX:
 
 ```shell
-python -m yunet_train.cli.export_onnx work_dirs/yunet_n/best_loss.pth --variant yunet_n --dynamic-export --output-file work_dirs/export/yunet_n_dynamic.onnx
+python -m yunet_train.cli.export_onnx work_dirs/yunet_n/best_loss.pth --variant yunet_n --dynamic --output-file work_dirs/export/yunet_n_dynamic.onnx
 ```
 
 The face ONNX output order follows the original YuNet convention:
@@ -266,7 +268,7 @@ python -m yunet_train.cli.eval_pose_coco work_dirs/yunet_pose_n/best_loss.pth --
 ### Export Pose ONNX
 
 ```shell
-python -m yunet_train.cli.export_pose_onnx work_dirs/yunet_pose_n/best_loss.pth --variant yunet_n --shape 640 640 --verify --output-file work_dirs/export/yunet_pose_n.onnx
+python -m yunet_train.cli.export_pose_onnx work_dirs/yunet_pose_n/best_loss.pth --variant yunet_n --shape 640 640 --output-file work_dirs/export/yunet_pose_n.onnx
 ```
 
 ## Console Commands
