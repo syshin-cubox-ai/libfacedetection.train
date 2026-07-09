@@ -11,7 +11,7 @@ from .onnx_export import (
 )
 from .optim import MuSGD, build_musgd_param_groups, build_sgd_param_groups
 from .priors import MlvlPointGenerator
-from .scheduler import LinearWarmupMultiStepLR, WarmupMultiStepLR
+from .scheduler import LinearWarmupMultiStepLR, WarmupLinearLR, WarmupMultiStepLR
 
 __all__ = [
     "AssignResult",
@@ -26,6 +26,7 @@ __all__ = [
     "nms",
     "MlvlPointGenerator",
     "LinearWarmupMultiStepLR",
+    "WarmupLinearLR",
     "WarmupMultiStepLR",
     "ModelEMA",
     "MuSGD",

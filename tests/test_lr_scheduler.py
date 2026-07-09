@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from yunet_train.engine import LinearWarmupMultiStepLR, WarmupMultiStepLR
+from yunet_train.engine import LinearWarmupMultiStepLR, WarmupLinearLR, WarmupMultiStepLR
 
 
 def test_linear_warmup_multi_step_lr_matches_yunet_schedule_shape() -> None:
@@ -110,5 +110,62 @@ def test_warmup_multi_step_lr_restores_state() -> None:
 
     assert restored.iter_count == scheduler.iter_count
     assert restored.warmup_bias_lr == scheduler.warmup_bias_lr
+    assert restored.get_last_lr() == scheduler.get_last_lr()
+    assert new_optimizer.param_groups[0]["lr"] == scheduler.get_last_lr()[0]
+
+
+def test_warmup_linear_lr_decays_linearly_to_lrf() -> None:
+    optimizer = _two_group_optimizer(lr=0.01, momentum=0.9)
+    scheduler = WarmupLinearLR(optimizer, epochs=10, lrf=0.1, warmup_iters=0)
+
+    # factor(e) = max(1 - (e-1)/epochs, 0) * (1 - lrf) + lrf
+    assert scheduler.step(epoch=1) == [pytest.approx(0.01)] * 2
+    assert scheduler.step(epoch=6) == [pytest.approx(0.01 * (0.5 * 0.9 + 0.1))] * 2
+    assert scheduler.step(epoch=10) == [pytest.approx(0.01 * (0.1 * 0.9 + 0.1))] * 2
+
+
+def test_warmup_linear_lr_warmup_ramps_toward_scheduled_lr() -> None:
+    optimizer = _two_group_optimizer(lr=0.01, momentum=0.9)
+    scheduler = WarmupLinearLR(
+        optimizer,
+        epochs=100,
+        lrf=0.01,
+        warmup_iters=4,
+        warmup_bias_lr=0.1,
+        warmup_momentum=0.8,
+    )
+
+    lrs = scheduler.step(epoch=1)
+    assert lrs[0] == pytest.approx(0.0)
+    assert lrs[1] == pytest.approx(0.1)
+    assert optimizer.param_groups[0]["momentum"] == pytest.approx(0.8)
+
+    scheduler.step(epoch=1)
+    lrs = scheduler.step(epoch=1)
+    assert lrs[0] == pytest.approx(0.005)
+    assert lrs[1] == pytest.approx(0.1 + (0.01 - 0.1) * 0.5)
+    assert optimizer.param_groups[0]["momentum"] == pytest.approx(0.85)
+
+    scheduler.step(epoch=1)
+    lrs = scheduler.step(epoch=1)
+    assert lrs == [pytest.approx(0.01), pytest.approx(0.01)]
+    assert optimizer.param_groups[0]["momentum"] == pytest.approx(0.9)
+
+
+def test_warmup_linear_lr_restores_state() -> None:
+    optimizer = _two_group_optimizer()
+    scheduler = WarmupLinearLR(
+        optimizer, epochs=10, lrf=0.05, warmup_iters=4, warmup_bias_lr=0.05
+    )
+    scheduler.step(epoch=1)
+    scheduler.step(epoch=1)
+
+    new_optimizer = _two_group_optimizer(lr=0.5)
+    restored = WarmupLinearLR(new_optimizer, epochs=99, warmup_iters=0)
+    restored.load_state_dict(scheduler.state_dict())
+
+    assert restored.iter_count == scheduler.iter_count
+    assert restored.epochs == scheduler.epochs
+    assert restored.lrf == scheduler.lrf
     assert restored.get_last_lr() == scheduler.get_last_lr()
     assert new_optimizer.param_groups[0]["lr"] == scheduler.get_last_lr()[0]

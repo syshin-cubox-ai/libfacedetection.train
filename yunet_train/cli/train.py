@@ -23,6 +23,7 @@ from torch.utils.data.distributed import DistributedSampler
 from yunet_train.engine import (
     ModelEMA,
     MuSGD,
+    WarmupLinearLR,
     WarmupMultiStepLR,
     build_musgd_param_groups,
     build_sgd_param_groups,
@@ -178,8 +179,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--prefetch-factor", type=int, default=1)
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--lr", type=float, default=0.01)
+    parser.add_argument(
+        "--lr-scheduler",
+        default="multistep",
+        choices=("multistep", "linear"),
+        help="LR decay shape: 'multistep' drops by --lr-gamma at --lr-steps; "
+        "'linear' decays linearly from --lr to --lr * --lrf over --epochs "
+        "(Ultralytics style, ignores --lr-steps/--lr-gamma).",
+    )
     parser.add_argument("--lr-steps", type=int, nargs="*", default=[400, 544])
     parser.add_argument("--lr-gamma", type=float, default=0.1)
+    parser.add_argument(
+        "--lrf",
+        type=float,
+        default=0.01,
+        help="Final LR fraction for --lr-scheduler linear.",
+    )
     parser.add_argument(
         "--warmup-epochs",
         type=float,
@@ -390,16 +405,30 @@ def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
     warmup_iters = (
         max(round(warmup_epochs * len(data_loader)), 100) if warmup_epochs > 0 else 0
     )
-    lr_scheduler = WarmupMultiStepLR(
-        optimizer,
-        milestones=tuple(args.lr_steps),
-        gamma=args.lr_gamma,
-        warmup_iters=warmup_iters,
-        warmup_bias_lr=getattr(args, "warmup_bias_lr", 0.1),
-        warmup_momentum=getattr(args, "warmup_momentum", 0.8),
-    )
+    scheduler_kind = getattr(args, "lr_scheduler", "multistep")
+    lr_scheduler: WarmupMultiStepLR | WarmupLinearLR
+    if scheduler_kind == "linear":
+        lr_scheduler = WarmupLinearLR(
+            optimizer,
+            epochs=args.epochs,
+            lrf=getattr(args, "lrf", 0.01),
+            warmup_iters=warmup_iters,
+            warmup_bias_lr=getattr(args, "warmup_bias_lr", 0.1),
+            warmup_momentum=getattr(args, "warmup_momentum", 0.8),
+        )
+        decay_desc = f"linear epochs={args.epochs} lrf={getattr(args, 'lrf', 0.01)}"
+    else:
+        lr_scheduler = WarmupMultiStepLR(
+            optimizer,
+            milestones=tuple(args.lr_steps),
+            gamma=args.lr_gamma,
+            warmup_iters=warmup_iters,
+            warmup_bias_lr=getattr(args, "warmup_bias_lr", 0.1),
+            warmup_momentum=getattr(args, "warmup_momentum", 0.8),
+        )
+        decay_desc = f"multistep milestones={tuple(args.lr_steps)} gamma={args.lr_gamma}"
     logger(
-        f"lr_scheduler milestones={tuple(args.lr_steps)} gamma={args.lr_gamma} "
+        f"lr_scheduler {decay_desc} "
         f"warmup_epochs={warmup_epochs} warmup_iters={warmup_iters} "
         f"warmup_bias_lr={getattr(args, 'warmup_bias_lr', 0.1)} "
         f"warmup_momentum={getattr(args, 'warmup_momentum', 0.8)}"
@@ -801,7 +830,7 @@ def _save_training_checkpoint(
     epoch: int,
     args: argparse.Namespace,
     metrics: dict[str, float | None],
-    lr_scheduler: WarmupMultiStepLR,
+    lr_scheduler: WarmupMultiStepLR | WarmupLinearLR,
     ema: ModelEMA | None = None,
 ) -> None:
     save_checkpoint(

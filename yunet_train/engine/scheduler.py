@@ -196,3 +196,119 @@ class WarmupMultiStepLR:
         self.last_lrs = [float(lr) for lr in state_dict["last_lrs"]]
         for group, lr in zip(self.optimizer.param_groups, self.last_lrs):
             group["lr"] = lr
+
+
+class WarmupLinearLR:
+    """Linear LR decay to ``base_lr * lrf`` with Ultralytics-style warmup.
+
+    The decay factor follows Ultralytics' linear schedule
+    ``max(1 - (epoch-1)/epochs, 0) * (1 - lrf) + lrf``: the first epoch runs
+    at the full base LR and the factor reaches ``lrf`` at the end of training.
+    Warmup behaves exactly like :class:`WarmupMultiStepLR` — ordinary groups
+    ramp from 0.0, groups tagged ``param_group="bias"`` ramp down from the
+    absolute ``warmup_bias_lr``, and momentum ramps from ``warmup_momentum``
+    to each group's base momentum.
+    """
+
+    def __init__(
+        self,
+        optimizer: torch.optim.Optimizer,
+        *,
+        epochs: int,
+        lrf: float = 0.01,
+        warmup_iters: int = 0,
+        warmup_bias_lr: float = 0.1,
+        warmup_momentum: float = 0.8,
+    ):
+        if epochs <= 0:
+            raise ValueError("epochs must be positive")
+        if not 0 < lrf <= 1:
+            raise ValueError("lrf must be in (0, 1]")
+        if warmup_iters < 0:
+            raise ValueError("warmup_iters must be non-negative")
+        if warmup_bias_lr < 0:
+            raise ValueError("warmup_bias_lr must be non-negative")
+
+        self.optimizer = optimizer
+        self.epochs = int(epochs)
+        self.lrf = lrf
+        self.warmup_iters = int(warmup_iters)
+        self.warmup_bias_lr = warmup_bias_lr
+        self.warmup_momentum = warmup_momentum
+        self.base_lrs = [float(group["lr"]) for group in optimizer.param_groups]
+        self.base_momentums = [
+            float(group["momentum"]) if "momentum" in group else None
+            for group in optimizer.param_groups
+        ]
+        self.iter_count = 0
+        self.last_epoch = 0
+        self.last_lrs = self.base_lrs.copy()
+
+    def step(self, *, epoch: int) -> list[float]:
+        if epoch <= 0:
+            raise ValueError("epoch must be one-based and positive")
+        decay = max(1.0 - (epoch - 1) / self.epochs, 0.0) * (1.0 - self.lrf) + self.lrf
+        in_warmup = self.iter_count < self.warmup_iters
+        progress = self.iter_count / self.warmup_iters if in_warmup else 1.0
+
+        lrs: list[float] = []
+        groups = zip(self.optimizer.param_groups, self.base_lrs, self.base_momentums)
+        for group, base_lr, base_momentum in groups:
+            target_lr = base_lr * decay
+            if in_warmup:
+                start_lr = (
+                    self.warmup_bias_lr
+                    if group.get("param_group") == "bias"
+                    else 0.0
+                )
+                lr = start_lr + (target_lr - start_lr) * progress
+                if base_momentum is not None:
+                    group["momentum"] = (
+                        self.warmup_momentum
+                        + (base_momentum - self.warmup_momentum) * progress
+                    )
+            else:
+                lr = target_lr
+                if base_momentum is not None:
+                    group["momentum"] = base_momentum
+            group["lr"] = lr
+            lrs.append(lr)
+
+        self.iter_count += 1
+        self.last_epoch = epoch
+        self.last_lrs = lrs.copy()
+        return lrs.copy()
+
+    def get_last_lr(self) -> list[float]:
+        return self.last_lrs.copy()
+
+    def state_dict(self) -> dict[str, Any]:
+        return {
+            "epochs": self.epochs,
+            "lrf": self.lrf,
+            "warmup_iters": self.warmup_iters,
+            "warmup_bias_lr": self.warmup_bias_lr,
+            "warmup_momentum": self.warmup_momentum,
+            "base_lrs": self.base_lrs,
+            "base_momentums": self.base_momentums,
+            "iter_count": self.iter_count,
+            "last_epoch": self.last_epoch,
+            "last_lrs": self.last_lrs,
+        }
+
+    def load_state_dict(self, state_dict: dict[str, Any]) -> None:
+        self.epochs = int(state_dict["epochs"])
+        self.lrf = float(state_dict["lrf"])
+        self.warmup_iters = int(state_dict["warmup_iters"])
+        self.warmup_bias_lr = float(state_dict["warmup_bias_lr"])
+        self.warmup_momentum = float(state_dict["warmup_momentum"])
+        self.base_lrs = [float(lr) for lr in state_dict["base_lrs"]]
+        self.base_momentums = [
+            None if momentum is None else float(momentum)
+            for momentum in state_dict["base_momentums"]
+        ]
+        self.iter_count = int(state_dict["iter_count"])
+        self.last_epoch = int(state_dict["last_epoch"])
+        self.last_lrs = [float(lr) for lr in state_dict["last_lrs"]]
+        for group, lr in zip(self.optimizer.param_groups, self.last_lrs):
+            group["lr"] = lr
