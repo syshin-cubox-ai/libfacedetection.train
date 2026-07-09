@@ -18,7 +18,7 @@ unset LOCAL_RANK
 unset WORLD_SIZE
 
 NUM_GPUS=${SLURM_GPUS_ON_NODE:-8}
-RUN_NAME=$(TZ=Asia/Seoul date +%y%m%d)_yunet26_n_upbatch_lr_warmup_wd
+RUN_NAME=$(TZ=Asia/Seoul date +%y%m%d)_yunet26n_upbatch_lr_warmup_wd
 
 echo "job=${SLURM_JOB_ID} node=$(hostname) gpus=${NUM_GPUS}"
 

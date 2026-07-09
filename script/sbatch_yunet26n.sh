@@ -18,7 +18,7 @@ unset LOCAL_RANK
 unset WORLD_SIZE
 
 NUM_GPUS=${SLURM_GPUS_ON_NODE:-8}
-RUN_NAME=$(TZ=Asia/Seoul date +%y%m%d)_yunet26_n_upbatch_lr
+RUN_NAME=$(TZ=Asia/Seoul date +%y%m%d)_yunet26n
 
 echo "job=${SLURM_JOB_ID} node=$(hostname) gpus=${NUM_GPUS}"
 
@@ -31,9 +31,9 @@ torchrun \
     --variant yunet_n \
     --image-size 640 \
     --epochs 640 \
-    --batch-size 16 \
-    --workers 8 \
-    --lr 0.02 \
+    --batch-size 2 \
+    --workers 2 \
+    --grad-clip-norm 1e9 \
     --optimizer musgd \
     --use-rle \
     --work-dir "work_dirs/${RUN_NAME}" \
