@@ -55,10 +55,10 @@ def export_model_to_onnx(
             tuple(output.shape) for output in flatten_outputs(model, example_input)
         )
 
-    t_start = time.time()
     print(
-        f"\nPyTorch: starting from '{checkpoint_path}' with input shape {tuple(input_shape)} BCHW and "
-        f"output shape(s) {output_shapes} ({_file_size(checkpoint_path):.1f} MB)"
+        f"PyTorch: starting from '{checkpoint_path}' ({_file_size(checkpoint_path):.1f} MB)\n"
+        f"{input_shape=} BCHW\n"
+        f"{output_shapes=}"
     )
 
     t_onnx = time.time()
@@ -104,10 +104,6 @@ def export_model_to_onnx(
             print(f"WARNING: ONNX: FP16 conversion failure: {e}")
 
     onnx.save(model_onnx, str(output_file))
-    print(
-        f"ONNX: export success ✅ {time.time() - t_onnx:.1f}s, "
-        f"saved as '{output_file}' ({_file_size(output_file):.1f} MB)"
-    )
 
     if verify:
         verify_input = torch.randn(input_shape, dtype=torch.float32, device=device)
@@ -115,12 +111,11 @@ def export_model_to_onnx(
         verify_onnx(
             model, verify_input, output_file, flatten_outputs, rtol=rtol, atol=atol
         )
-        print("The outputs are all close.")
+        print("ONNX: the outputs are all close.")
 
     print(
-        f"\nExport complete ({time.time() - t_start:.1f}s)"
-        f"\nResults saved to {output_file.parent.resolve()}"
-        f"\nVisualize:       https://netron.app"
+        f"ONNX: export success ✅ {time.time() - t_onnx:.1f}s, "
+        f"saved as '{output_file}' ({_file_size(output_file):.1f} MB)"
     )
     return output_file
 
