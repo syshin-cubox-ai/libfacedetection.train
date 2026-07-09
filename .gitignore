@@ -54,6 +54,6 @@ tests/output/
 *.py~
 *.sh~
 
-/onnx
-!/onnx/yunet*
+/onnx_files/*
+!/onnx_files/yunet*
 *.sqsh

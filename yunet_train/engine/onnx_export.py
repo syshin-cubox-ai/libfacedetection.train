@@ -1,11 +1,23 @@
+from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
 import numpy as np
+import onnx
 import onnxslim
 import torch
+from onnxruntime.transformers import float16
 
 from yunet_train.engine.checkpoint import load_checkpoint
+
+
+def best_onnx_opset(cuda: bool = False) -> int:
+    """Return max ONNX opset for this torch version with ONNX fallback."""
+    opset = torch.onnx.utils._constants.ONNX_MAX_OPSET - 1  # second-latest for safety
+    opset = min(opset, 20)  # legacy TorchScript exporter caps at opset 20 in torch 2.9+
+    if cuda:
+        opset -= 2  # fix CUDA ONNXRuntime NMS squeeze op errors
+    return min(opset, onnx.defs.onnx_opset_version())
 
 
 def export_model_to_onnx(
@@ -18,12 +30,14 @@ def export_model_to_onnx(
     output_names: list[str],
     flatten_outputs: Callable[[torch.nn.Module, torch.Tensor], list[torch.Tensor]],
     dynamic: bool,
-    opset_version: int,
+    opset: int | None,
     device: torch.device | str,
     verify: bool,
+    half: bool = False,
     clean_state_dict: Callable[[dict[str, torch.Tensor]], dict[str, torch.Tensor]]
     | None = None,
 ) -> Path:
+    device = torch.device(device)
     checkpoint = torch.load(checkpoint_path, map_location="cpu")
     resolved_variant = variant or checkpoint.get("config", {}).get("variant", "yunet_n")
     model = build_model(resolved_variant)
@@ -32,27 +46,58 @@ def export_model_to_onnx(
         model.load_state_dict(state_dict, strict=True)
     else:
         load_checkpoint(checkpoint_path, model=model, map_location="cpu")
-    model.to(device).eval()
+    model = model.to(device).float().eval()
+    for p in model.parameters():
+        p.requires_grad = False
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
-    example_input = torch.randn(input_shape, dtype=torch.float32, device=device)
+    example_input = torch.zeros(input_shape, dtype=torch.float32, device=device)
+    for _ in range(2):  # dry runs
+        model(example_input)
+
+    opset = opset or best_onnx_opset(cuda=device.type == "cuda")
     dynamic_axes = _dynamic_axes(output_names) if dynamic else None
 
-    with torch.no_grad():
-        torch.onnx.export(
-            model,
-            (example_input,),
-            output_file,
-            input_names=["input"],
-            output_names=output_names,
-            opset_version=opset_version,
-            dynamo=False,
-            dynamic_axes=dynamic_axes,
-        )
+    torch.onnx.export(
+        model,
+        (example_input,),
+        output_file,
+        verbose=False,
+        opset_version=opset,
+        do_constant_folding=True,
+        input_names=["input"],
+        output_names=output_names,
+        dynamic_axes=dynamic_axes,
+        dynamo=False,
+    )
 
-    onnxslim.slim(str(output_file), output_model=str(output_file))
+    model_onnx = onnx.load(str(output_file))
+    model_onnx = onnxslim.slim(model_onnx)
+
+    for key, value in _metadata(model, resolved_variant, input_shape, dynamic).items():
+        meta = model_onnx.metadata_props.add()
+        meta.key, meta.value = key, str(value)
+
+    if getattr(model_onnx, "ir_version", 0) > 10:
+        # limit IR version to 10 for ONNXRuntime compatibility
+        model_onnx.ir_version = 10
+
+    if half:
+        try:
+            model_onnx = float16.convert_float_to_float16(
+                model_onnx, keep_io_types=True
+            )
+        except Exception as e:
+            print(f"WARNING: FP16 conversion failure: {e}")
+
+    onnx.save(model_onnx, str(output_file))
+
     if verify:
-        verify_onnx(model, example_input, output_file, flatten_outputs)
+        verify_input = torch.randn(input_shape, dtype=torch.float32, device=device)
+        rtol, atol = (1e-2, 1e-2) if half else (1e-3, 1e-5)
+        verify_onnx(
+            model, verify_input, output_file, flatten_outputs, rtol=rtol, atol=atol
+        )
     return output_file
 
 
@@ -61,6 +106,8 @@ def verify_onnx(
     example_input: torch.Tensor,
     output_file: Path,
     flatten_outputs: Callable[[torch.nn.Module, torch.Tensor], list[torch.Tensor]],
+    rtol: float,
+    atol: float,
 ) -> None:
     import onnxruntime
 
@@ -83,21 +130,40 @@ def verify_onnx(
         np.testing.assert_allclose(
             onnx_output,
             torch_output,
-            rtol=1e-3,
-            atol=1e-5,
-            err_msg=f"ONNX output {idx} differs from PyTorch",
+            rtol=rtol,
+            atol=atol,
         )
     print("The numerical values are close between PyTorch and ONNX")
 
 
-def parse_input_shape(shape: list[int]) -> tuple[int, int, int, int]:
+def parse_input_shape(shape: list[int], batch: int = 1) -> tuple[int, int, int, int]:
     if len(shape) == 1:
         height = width = shape[0]
     elif len(shape) == 2:
         height, width = shape
     else:
         raise ValueError("--shape expects one int or two ints")
-    return (1, 3, height, width)
+    return (batch, 3, height, width)
+
+
+def _metadata(
+    model: torch.nn.Module,
+    variant: str,
+    input_shape: tuple[int, int, int, int],
+    dynamic: bool,
+) -> dict[str, object]:
+    metadata: dict[str, object] = {
+        "description": f"YuNet {variant} model",
+        "date": datetime.now().isoformat(),
+        "batch": input_shape[0],
+        "imgsz": list(input_shape[2:]),
+        "dynamic": dynamic,
+    }
+    config = getattr(model, "config", None)
+    strides = getattr(config, "strides", None)
+    if strides:
+        metadata["stride"] = int(max(strides))
+    return metadata
 
 
 def _dynamic_axes(output_names: list[str]) -> dict[str, dict[int, str]]:

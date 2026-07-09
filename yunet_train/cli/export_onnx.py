@@ -13,9 +13,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--variant", choices=("yunet_n", "yunet_s"), default="yunet_n")
     parser.add_argument("--output-file", type=Path)
     parser.add_argument("--shape", type=int, nargs="+", default=[640, 640])
+    parser.add_argument("--batch", type=int, default=1)
     parser.add_argument("--dynamic", action="store_true")
-    parser.add_argument("--opset", type=int, default=18)
-    parser.add_argument("--device", type=str, default="cpu")
+    parser.add_argument("--half", action="store_true")
+    parser.add_argument("--opset", type=int, default=None)
+    parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--no-verify", dest="verify", action="store_false")
     return parser.parse_args()
 
@@ -52,13 +54,14 @@ def main():
         variant=args.variant,
         build_model=build_yunet,
         output_file=args.output_file or args.checkpoint.with_suffix(".onnx"),
-        input_shape=parse_input_shape(args.shape),
+        input_shape=parse_input_shape(args.shape, batch=args.batch),
         output_names=_output_names(),
         flatten_outputs=_flatten_export_outputs,
         dynamic=args.dynamic,
-        opset_version=args.opset,
+        opset=args.opset,
         device=args.device,
         verify=args.verify,
+        half=args.half,
         clean_state_dict=clean_inference_state_dict,
     )
     print(f"Successfully exported: {output_path}")

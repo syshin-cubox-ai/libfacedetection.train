@@ -4,14 +4,13 @@ import argparse
 from pathlib import Path
 from shutil import rmtree
 
-import onnx
 import torch
 
+import onnx
 from yunet_train.cli.export_cpp import export_cpp
 from yunet_train.cli.export_onnx import _flatten_export_outputs, _output_names
 from yunet_train.engine.onnx_export import export_model_to_onnx
 from yunet_train.tasks.face import build_yunet, clean_inference_state_dict
-
 
 OUTPUT_ROOT = Path(__file__).resolve().parent / "output" / "export_cli"
 
@@ -47,7 +46,7 @@ def test_export_onnx_smoke() -> None:
         output_names=_output_names(),
         flatten_outputs=_flatten_export_outputs,
         dynamic=False,
-        opset_version=18,
+        opset=18,
         device="cpu",
         verify=True,
         clean_state_dict=clean_inference_state_dict,

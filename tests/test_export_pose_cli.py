@@ -3,13 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 from shutil import rmtree
 
-import onnx
 import torch
 
+import onnx
 from yunet_train.cli.export_pose_onnx import _flatten_export_outputs, _output_names
 from yunet_train.engine.onnx_export import export_model_to_onnx
 from yunet_train.tasks.pose import build_yunet_pose
-
 
 OUTPUT_ROOT = Path(__file__).resolve().parent / "output" / "export_pose_cli"
 
@@ -48,7 +47,7 @@ def test_export_pose_onnx_smoke() -> None:
             model, image, kpt_shape
         ),
         dynamic=False,
-        opset_version=18,
+        opset=18,
         device="cpu",
         verify=True,
     )
