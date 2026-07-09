@@ -34,7 +34,7 @@ torchrun \
     --batch-size 16 \
     --workers 8 \
     --lr 0.02 \
-    --warmup-iters 500 \
+    --ema \
     --optimizer musgd \
     --use-rle \
     --work-dir "work_dirs/${RUN_NAME}" \

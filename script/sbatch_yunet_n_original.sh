@@ -33,7 +33,6 @@ torchrun \
     --epochs 640 \
     --batch-size 2 \
     --workers 2 \
-    --no-ema \
     --grad-clip-norm 1e9 \
     --work-dir "work_dirs/${RUN_NAME}" \
     --wandb-project yunet-train \

@@ -203,10 +203,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--weight-decay", type=float, default=5e-4)
     parser.add_argument("--grad-clip-norm", type=float, default=10)
     parser.add_argument(
-        "--no-ema",
+        "--ema",
         action="store_true",
-        help="Disable the exponential moving average of model weights "
-        "(EMA is used for validation and the best checkpoint).",
+        help="Enable the exponential moving average of model weights; validation "
+        "and the best checkpoint then use the EMA weights. Off by default "
+        "(EMA measured worse on WIDER FACE).",
     )
     parser.add_argument("--ema-decay", type=float, default=0.9999)
     parser.add_argument("--ema-tau", type=float, default=2000.0)
@@ -426,7 +427,7 @@ def _run_training(args: argparse.Namespace, dist_ctx: DistContext) -> None:
         )
 
     ema: ModelEMA | None = None
-    if not getattr(args, "no_ema", False):
+    if getattr(args, "ema", False):
         ema = ModelEMA(
             model,
             decay=getattr(args, "ema_decay", 0.9999),

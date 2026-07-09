@@ -33,7 +33,6 @@ torchrun \
     --epochs 640 \
     --batch-size 2 \
     --workers 2 \
-    --no-ema \
     --work-dir "work_dirs/${RUN_NAME}" \
     --wandb-project yunet-train \
     --wandb-run-name "${RUN_NAME}"

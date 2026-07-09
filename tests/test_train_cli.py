@@ -77,6 +77,7 @@ def test_train_cli_smoke_saves_checkpoint(monkeypatch: pytest.MonkeyPatch) -> No
         warmup_epochs=0.0,
         momentum=0.9,
         weight_decay=0.0,
+        ema=True,
         device="cpu",
         eval_interval=1,
         resume=None,

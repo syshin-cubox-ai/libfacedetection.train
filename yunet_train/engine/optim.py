@@ -200,17 +200,25 @@ def build_sgd_param_groups(
     momentum: float,
     weight_decay: float,
 ) -> list[dict[str, Any]]:
-    """Split params into weights vs biases so bias warmup can target its own group.
+    """Split params Ultralytics-style: decay only on >=2D weights.
 
-    Weight decay is applied uniformly to both groups (unchanged from the
-    previous single-group SGD behavior); only the ``param_group`` tag differs.
+    Norm scales and biases carry no regularization benefit (few parameters)
+    and decaying them suppresses channels / fights learned offsets, so they
+    get ``weight_decay=0``. Biases get their own group tagged
+    ``param_group="bias"`` so the LR scheduler can apply bias warmup.
     """
     weight_params = []
+    norm_params = []
     bias_params = []
     for name, param in model.named_parameters():
         if not param.requires_grad:
             continue
-        (bias_params if name.endswith(".bias") else weight_params).append(param)
+        if param.ndim >= 2:
+            weight_params.append(param)
+        elif name.endswith(".bias"):
+            bias_params.append(param)
+        else:
+            norm_params.append(param)
     groups: list[dict[str, Any]] = []
     if weight_params:
         groups.append(
@@ -222,13 +230,23 @@ def build_sgd_param_groups(
                 "param_group": "weights",
             }
         )
+    if norm_params:
+        groups.append(
+            {
+                "params": norm_params,
+                "lr": lr,
+                "momentum": momentum,
+                "weight_decay": 0.0,
+                "param_group": "norm",
+            }
+        )
     if bias_params:
         groups.append(
             {
                 "params": bias_params,
                 "lr": lr,
                 "momentum": momentum,
-                "weight_decay": weight_decay,
+                "weight_decay": 0.0,
                 "param_group": "bias",
             }
         )
