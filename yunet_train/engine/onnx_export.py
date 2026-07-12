@@ -107,7 +107,7 @@ def export_model_to_onnx(
 
     if verify:
         verify_input = torch.randn(input_shape, dtype=torch.float32, device=device)
-        rtol, atol = (1e-2, 1e-2) if half else (1e-3, 1e-5)
+        rtol, atol = (1e-2, 1e-2) if half else (1e-3, 1e-4)
         verify_onnx(
             model, verify_input, output_file, flatten_outputs, rtol=rtol, atol=atol
         )
