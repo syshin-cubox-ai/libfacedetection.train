@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 값을 확인하세요.
-pytorch_version="2.12.1"
+pytorch_version="2.13.0"
 cuda_version="12.6"
 cudnn_version="9"
 workdir="/purestorage/AILAB/AI_1/syshin/github_repository/libfacedetection.train"
